@@ -1,0 +1,30 @@
+# ---- Ambiente
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# ---- Credenciais (ETP 11.2 — nunca publicados)
+.env
+
+# ---- Dado biométrico (R-07) — NUNCA versionar
+modelo/
+dados_faciais/
+# o modelo LBPH é um .yml; a regra ampla protege contra salvá-lo fora de modelo/
+*.yml
+*.yml.enc
+# ...mas o compose É necessário para quem clona subir o banco (a negação vem
+# depois da regra ampla de propósito: no .gitignore, a última que casa vence)
+!docker-compose.yml
+termos/
+*.jpg.face
+capturas/
+
+# ---- Banco
+*.sql.gz
+dump*.sql
+
+# ---- Saídas geradas
+exportacoes/
+resultados/
+logs/

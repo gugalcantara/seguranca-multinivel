@@ -1,0 +1,22 @@
+# MySQL 8.0 local via Docker — alternativa a instalar o MySQL/XAMPP na máquina.
+# Na primeira subida, executa sql/01..03 automaticamente (schema, dados iniciais, conta da aplicação).
+#
+#   docker compose up -d          # sobe
+#   docker compose down           # para (os dados ficam no volume)
+#   docker compose down -v        # para e APAGA o banco (descarte — ETP 12.3)
+#
+# Porta 3307 no host para não colidir com um MySQL já instalado. No .env: DB_PORTA=3307
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: aps_pivc_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_SENHA:-raiz-somente-local}
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - ./sql:/docker-entrypoint-initdb.d:ro
+      - aps_pivc_dados:/var/lib/mysql
+
+volumes:
+  aps_pivc_dados:

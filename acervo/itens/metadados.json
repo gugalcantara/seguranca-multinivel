@@ -1,0 +1,842 @@
+{
+  "pendencias": [
+    {
+      "codigo": "PD-0001",
+      "substancia": "Lodo galvânico com cromo hexavalente",
+      "classe_risco": "Classe I (NBR 10004)",
+      "quantidade": 20.2,
+      "unidade": "t",
+      "uf": "SP",
+      "municipio": "Município Fictício Alfa",
+      "latitude": -17.204432,
+      "longitude": -40.37999,
+      "prazo_coleta": "2025-12-10",
+      "situacao": "PENDENTE",
+      "atividade": "AG-03",
+      "motivo": "MP-01",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Alfa Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "FALIDA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Ípsilon S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0002",
+      "substancia": "Solventes clorados",
+      "classe_risco": "Classe I (NBR 10004)",
+      "quantidade": 16.94,
+      "unidade": "t",
+      "uf": "RJ",
+      "municipio": "Município Fictício Beta",
+      "latitude": -15.68578,
+      "longitude": -40.679171,
+      "prazo_coleta": "2027-01-11",
+      "situacao": "PENDENTE",
+      "atividade": "AG-02",
+      "motivo": "MP-08",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Beta Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "ATIVA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Tau S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0003",
+      "substancia": "Fonte selada de radioterapia (desativada)",
+      "classe_risco": "Rejeito radioativo",
+      "quantidade": 3.413,
+      "unidade": "t",
+      "uf": "SP",
+      "municipio": "Município Fictício Gama",
+      "latitude": -22.818995,
+      "longitude": -53.333122,
+      "prazo_coleta": "2025-09-07",
+      "situacao": "PENDENTE",
+      "atividade": "AG-04",
+      "motivo": "MP-05",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Gama Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "FALIDA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Sigma S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0004",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 10.21,
+      "unidade": "t",
+      "uf": "RS",
+      "municipio": "Município Fictício Delta",
+      "latitude": -5.502191,
+      "longitude": -39.201606,
+      "prazo_coleta": "2026-09-16",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-02",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Delta Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "FALIDA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Rô S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0005",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 11.647,
+      "unidade": "t",
+      "uf": "GO",
+      "municipio": "Município Fictício Épsilon",
+      "latitude": -26.477791,
+      "longitude": -44.038484,
+      "prazo_coleta": "2026-07-09",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-01",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Épsilon Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "FALIDA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Pi S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0006",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 17.004,
+      "unidade": "t",
+      "uf": "PE",
+      "municipio": "Município Fictício Zeta",
+      "latitude": -20.030667,
+      "longitude": -45.042797,
+      "prazo_coleta": "2027-01-19",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-02",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Zeta Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "BAIXADA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Ômicron S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0007",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 16.046,
+      "unidade": "t",
+      "uf": "PE",
+      "municipio": "Município Fictício Eta",
+      "latitude": -16.883682,
+      "longitude": -40.643879,
+      "prazo_coleta": "2026-12-30",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-01",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Eta Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "FALIDA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Xi S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0008",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 32.762,
+      "unidade": "t",
+      "uf": "MG",
+      "municipio": "Município Fictício Teta",
+      "latitude": -5.931869,
+      "longitude": -46.105319,
+      "prazo_coleta": "2025-12-10",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-07",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Teta Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "BAIXADA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Ni S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0009",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 34.015,
+      "unidade": "t",
+      "uf": "PR",
+      "municipio": "Município Fictício Iota",
+      "latitude": -26.949669,
+      "longitude": -43.087976,
+      "prazo_coleta": "2026-12-20",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-05",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Iota Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "FALIDA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Mi S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0010",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 22.016,
+      "unidade": "t",
+      "uf": "GO",
+      "municipio": "Município Fictício Kapa",
+      "latitude": -13.828424,
+      "longitude": -43.128499,
+      "prazo_coleta": "2026-10-12",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-07",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Kapa Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "ATIVA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Lambda S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0011",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 0.569,
+      "unidade": "t",
+      "uf": "GO",
+      "municipio": "Município Fictício Lambda",
+      "latitude": -26.253906,
+      "longitude": -40.005291,
+      "prazo_coleta": "2026-12-09",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-08",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Lambda Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "BAIXADA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Kapa S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0012",
+      "substancia": "Resíduo de limpeza de tanque",
+      "classe_risco": "Classe I (NBR 10004)",
+      "quantidade": 27.767,
+      "unidade": "t",
+      "uf": "GO",
+      "municipio": "Município Fictício Mi",
+      "latitude": -18.333597,
+      "longitude": -41.966043,
+      "prazo_coleta": "2027-01-18",
+      "situacao": "PENDENTE",
+      "atividade": "AG-06",
+      "motivo": "MP-07",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Mi Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "FALIDA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Iota S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0013",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 33.29,
+      "unidade": "t",
+      "uf": "SP",
+      "municipio": "Município Fictício Ni",
+      "latitude": -22.083572,
+      "longitude": -39.414201,
+      "prazo_coleta": "2025-12-05",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-08",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Ni Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "FALIDA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Teta S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0014",
+      "substancia": "Solventes clorados",
+      "classe_risco": "Classe I (NBR 10004)",
+      "quantidade": 18.226,
+      "unidade": "t",
+      "uf": "GO",
+      "municipio": "Município Fictício Xi",
+      "latitude": -5.868295,
+      "longitude": -38.556448,
+      "prazo_coleta": "2026-12-30",
+      "situacao": "PENDENTE",
+      "atividade": "AG-02",
+      "motivo": "MP-02",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Xi Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "FALIDA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Eta S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0015",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 14.931,
+      "unidade": "t",
+      "uf": "PE",
+      "municipio": "Município Fictício Ômicron",
+      "latitude": -25.135335,
+      "longitude": -40.437166,
+      "prazo_coleta": "2026-01-23",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-08",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Ômicron Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "ATIVA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Zeta S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0016",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 23.309,
+      "unidade": "t",
+      "uf": "PE",
+      "municipio": "Município Fictício Pi",
+      "latitude": -6.695542,
+      "longitude": -53.587885,
+      "prazo_coleta": "2026-03-18",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-04",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Pi Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "ATIVA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Épsilon S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0017",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 26.805,
+      "unidade": "t",
+      "uf": "GO",
+      "municipio": "Município Fictício Rô",
+      "latitude": -14.114788,
+      "longitude": -52.369065,
+      "prazo_coleta": "2026-07-13",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-08",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Rô Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "FALIDA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Delta S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0018",
+      "substancia": "Solventes clorados",
+      "classe_risco": "Classe I (NBR 10004)",
+      "quantidade": 21.923,
+      "unidade": "t",
+      "uf": "MG",
+      "municipio": "Município Fictício Sigma",
+      "latitude": -18.175412,
+      "longitude": -52.769323,
+      "prazo_coleta": "2027-01-25",
+      "situacao": "PENDENTE",
+      "atividade": "AG-02",
+      "motivo": "MP-05",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Sigma Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "ATIVA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Gama S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0019",
+      "substancia": "Hidrocarbonetos (BTEX) em solo",
+      "classe_risco": "Área contaminada",
+      "quantidade": 37.415,
+      "unidade": "t",
+      "uf": "MG",
+      "municipio": "Município Fictício Tau",
+      "latitude": -10.414051,
+      "longitude": -39.444726,
+      "prazo_coleta": "2026-07-06",
+      "situacao": "PENDENTE",
+      "atividade": "AG-01",
+      "motivo": "MP-07",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Tau Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "BAIXADA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Beta S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    },
+    {
+      "codigo": "PD-0020",
+      "substancia": "Lodo galvânico com cromo hexavalente",
+      "classe_risco": "Classe I (NBR 10004)",
+      "quantidade": 15.165,
+      "unidade": "t",
+      "uf": "PR",
+      "municipio": "Município Fictício Ípsilon",
+      "latitude": -6.029387,
+      "longitude": -48.381084,
+      "prazo_coleta": "2025-11-10",
+      "situacao": "PENDENTE",
+      "atividade": "AG-03",
+      "motivo": "MP-01",
+      "sintetico": true,
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py",
+      "responsaveis": [
+        {
+          "nome": "Empresa Fictícia Ípsilon Ltda.",
+          "vinculo": "GERADOR_ORIGINAL",
+          "situacao_cadastral": "BAIXADA"
+        },
+        {
+          "nome": "Imobiliária Exemplo Alfa S.A.",
+          "vinculo": "PROPRIETARIO_ATUAL",
+          "situacao_cadastral": "ATIVA"
+        }
+      ]
+    }
+  ],
+  "itens": [
+    {
+      "codigo": "A1-01",
+      "titulo": "Panorama Nacional",
+      "tipo": "DOCUMENTO",
+      "arquivo": "a1-01.png",
+      "nivel_minimo": 1,
+      "regioes_revisadas": true,
+      "sintetico": true,
+      "uf": null,
+      "pendencia": null,
+      "regioes": [],
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py"
+    },
+    {
+      "codigo": "A1-02",
+      "titulo": "Distribuição por Atividade",
+      "tipo": "DOCUMENTO",
+      "arquivo": "a1-02.png",
+      "nivel_minimo": 1,
+      "regioes_revisadas": true,
+      "sintetico": true,
+      "uf": null,
+      "pendencia": null,
+      "regioes": [],
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py"
+    },
+    {
+      "codigo": "A1-05",
+      "titulo": "Mapa de Densidade",
+      "tipo": "MAPA",
+      "arquivo": "a1-05.png",
+      "nivel_minimo": 1,
+      "regioes_revisadas": true,
+      "sintetico": true,
+      "uf": null,
+      "pendencia": null,
+      "regioes": [
+        {
+          "x": 584,
+          "y": 330,
+          "largura": 134,
+          "altura": 25,
+          "rotulo": "COORDENADA",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 573,
+          "y": 356,
+          "largura": 134,
+          "altura": 25,
+          "rotulo": "COORDENADA",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 126,
+          "y": 236,
+          "largura": 134,
+          "altura": 25,
+          "rotulo": "COORDENADA",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 625,
+          "y": 527,
+          "largura": 126,
+          "altura": 25,
+          "rotulo": "COORDENADA",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 454,
+          "y": 175,
+          "largura": 134,
+          "altura": 25,
+          "rotulo": "COORDENADA",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 419,
+          "y": 283,
+          "largura": 134,
+          "altura": 25,
+          "rotulo": "COORDENADA",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 574,
+          "y": 336,
+          "largura": 134,
+          "altura": 25,
+          "rotulo": "COORDENADA",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 381,
+          "y": 520,
+          "largura": 126,
+          "altura": 25,
+          "rotulo": "COORDENADA",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 554,
+          "y": 556,
+          "largura": 263,
+          "altura": 26,
+          "rotulo": "CUSTODIA",
+          "nivel_minimo": 3
+        }
+      ],
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py"
+    },
+    {
+      "codigo": "A2-01",
+      "titulo": "Ficha da Pendência",
+      "tipo": "DOCUMENTO",
+      "arquivo": "a2-01.png",
+      "nivel_minimo": 2,
+      "regioes_revisadas": true,
+      "sintetico": true,
+      "uf": "SP",
+      "pendencia": "PD-0001",
+      "regioes": [
+        {
+          "x": 254,
+          "y": 266,
+          "largura": 339,
+          "altura": 30,
+          "rotulo": "ENDERECO",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 254,
+          "y": 406,
+          "largura": 227,
+          "altura": 31,
+          "rotulo": "RESPONSAVEL",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 254,
+          "y": 441,
+          "largura": 265,
+          "altura": 31,
+          "rotulo": "RESPONSAVEL",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 254,
+          "y": 526,
+          "largura": 303,
+          "altura": 31,
+          "rotulo": "CUSTODIA",
+          "nivel_minimo": 3
+        }
+      ],
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py"
+    },
+    {
+      "codigo": "A2-04",
+      "titulo": "Rastreio de Manifesto",
+      "tipo": "DOCUMENTO",
+      "arquivo": "a2-04.png",
+      "nivel_minimo": 2,
+      "regioes_revisadas": true,
+      "sintetico": true,
+      "uf": "RJ",
+      "pendencia": "PD-0002",
+      "regioes": [
+        {
+          "x": 254,
+          "y": 231,
+          "largura": 233,
+          "altura": 31,
+          "rotulo": "RESPONSAVEL",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 254,
+          "y": 266,
+          "largura": 288,
+          "altura": 31,
+          "rotulo": "RESPONSAVEL",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 254,
+          "y": 301,
+          "largura": 245,
+          "altura": 31,
+          "rotulo": "RESPONSAVEL",
+          "nivel_minimo": 2
+        },
+        {
+          "x": 254,
+          "y": 406,
+          "largura": 96,
+          "altura": 27,
+          "rotulo": "RASTREIO",
+          "nivel_minimo": 3
+        }
+      ],
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py"
+    },
+    {
+      "codigo": "A2-06",
+      "titulo": "Foto de Acondicionamento",
+      "tipo": "FOTO",
+      "arquivo": "a2-06.png",
+      "nivel_minimo": 2,
+      "regioes_revisadas": true,
+      "sintetico": true,
+      "uf": "SP",
+      "pendencia": "PD-0001",
+      "regioes": [],
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py"
+    },
+    {
+      "codigo": "A3-01",
+      "titulo": "Consolidado Nacional",
+      "tipo": "DOCUMENTO",
+      "arquivo": "a3-01.png",
+      "nivel_minimo": 3,
+      "regioes_revisadas": true,
+      "sintetico": true,
+      "uf": null,
+      "pendencia": null,
+      "regioes": [],
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py"
+    },
+    {
+      "codigo": "A3-02",
+      "titulo": "Matriz de Criticidade",
+      "tipo": "DOCUMENTO",
+      "arquivo": "a3-02.png",
+      "nivel_minimo": 3,
+      "regioes_revisadas": true,
+      "sintetico": true,
+      "uf": null,
+      "pendencia": null,
+      "regioes": [],
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py"
+    },
+    {
+      "codigo": "A3-05",
+      "titulo": "Dossiê Completo",
+      "tipo": "DOCUMENTO",
+      "arquivo": "a3-05.png",
+      "nivel_minimo": 3,
+      "regioes_revisadas": false,
+      "sintetico": true,
+      "uf": "SP",
+      "pendencia": "PD-0003",
+      "regioes": [],
+      "fonte": "Sintético — gerado por acervo/gerar_exemplos.py"
+    }
+  ]
+}
