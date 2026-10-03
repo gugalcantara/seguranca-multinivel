@@ -1,5 +1,8 @@
 # ---- Ambiente
-.venv/
+# o padrão cobre .venv, .venv2, .venv-antigo…: um ambiente renomeado continua
+# ignorado. Hoje o próprio venv grava um .gitignore com '*' lá dentro, mas
+# depender disso deixaria 6 mil arquivos a um detalhe de distância do push.
+.venv*/
 __pycache__/
 *.pyc
 .pytest_cache/

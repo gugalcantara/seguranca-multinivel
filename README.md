@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-contrib%204.10-5C3EE8?logo=opencv&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
-![Testes](https://img.shields.io/badge/testes-246%20passando-1f7a4d)
+![Testes](https://img.shields.io/badge/testes-264%20passando-1f7a4d)
 
 Aplicação desktop em Python que protege um cadastro **fictício** de materiais perigosos ainda não recolhidos —
 resíduo químico Classe I, rejeito radioativo, áreas contaminadas. O acesso combina **senha e reconhecimento
@@ -27,6 +27,16 @@ hash**.
 | **1** | Servidores | face | **1:N** | agregados, sem localização | livre |
 | **2** | Diretores | matrícula + senha → face | **1:1** | registros da própria UF | com marca d'água |
 | **3** | Ministro | + senha forte + desafio na câmera + **segunda pessoa** | **1:1** (limiar mais duro) | visão nacional | **bloqueado** |
+
+> **A "segunda pessoa" do nível 3 é opcional por configuração.** A regra dos dois modela a custódia
+> compartilhada de material perigoso — ninguém abre sozinho —, mas exige duas pessoas presentes a cada teste do
+> N3, o que trava o desenvolvimento. Em [`config.ini`](config.ini), `exigir_segunda_pessoa = false` dispensa a
+> segunda pessoa; `true` religa. **No repositório ela vem desligada.**
+>
+> Desligada, o fator sai da exigência, da faixa de etapas da tela e da lista de fatores gravada na trilha — não
+> vira um fator "cumprido" que não foi, o que faria a auditoria ler *duas pessoas conferiram* onde houve uma só.
+> Nada mais do nível 3 é afrouxado: senha forte, reconhecimento 1:1 com o limiar mais duro, desafio de
+> vivacidade e sessão com tempo-limite continuam valendo, e há testes que garantem isso.
 
 O mesmo item do acervo é servido de formas diferentes conforme o nível: no `A1-05 Mapa de Densidade`, as
 coordenadas aparecem borradas no nível 1, legíveis no 2, e a instalação de custódia só no 3 — e a supressão é
@@ -150,27 +160,41 @@ dizendo *por que* cada uma foi recusada (*muito escura*, *fora de foco*, *mais d
 
 ## Instalação
 
-**Requisitos:** Python 3.11, MySQL 8 (ou Docker) e uma webcam.
+**Requisitos:** uma webcam, mais três programas instalados uma única vez por máquina:
 
-```bash
-# 1. ambiente — o uv baixa o 3.11 sem mexer no Python do sistema
+| | Para quê | Como instalar no Windows |
+|---|---|---|
+| **Git** | clonar o repositório | `winget install Git.Git` |
+| **uv** | baixa o Python 3.11 sem mexer no Python do sistema | `winget install astral-sh.uv` |
+| **Docker Desktop** | sobe o MySQL 8 sem instalar banco na máquina | `winget install Docker.DockerDesktop` |
+
+Feche e reabra o terminal depois de instalar, para o `PATH` atualizar. Sem Docker, dá para usar um MySQL
+próprio — veja a observação no fim desta seção.
+
+```powershell
+# 1. ambiente virtual com Python 3.11 (o uv baixa a versão se faltar)
 uv venv --python 3.11 .venv
-uv pip install --python .venv/Scripts/python.exe -r requirements.txt
+uv pip install --python .venv\Scripts\python.exe -r requirements.txt
 
-# 2. banco
-docker compose up -d        # sobe o MySQL na porta 3307 e cria o schema
+# 2. banco — o Docker Desktop precisa estar ABERTO e com o ícone "running"
+docker compose up -d        # publica o MySQL em 127.0.0.1:3307 e cria o schema
 
 # 3. credenciais
-cp .env.exemplo .env
-python -m ferramentas gerar-chave     # cole em CHAVE_CIFRAGEM
-python -m ferramentas hash-admin      # cole em ADMIN_SENHA_HASH
+Copy-Item .env.exemplo .env
+.venv\Scripts\python.exe -m ferramentas gerar-chave     # cole em CHAVE_CIFRAGEM
+.venv\Scripts\python.exe -m ferramentas hash-admin      # cole em ADMIN_SENHA_HASH
 
-# 4. acervo de exemplo
-python -m ferramentas importar-acervo
+# 4. acervo de exemplo (só depois que o banco terminar de subir — ver abaixo)
+.venv\Scripts\python.exe -m ferramentas importar-acervo
 
-# 5. conferir o ambiente (webcam, FPS, LBPH, KCF)
-python verificar_ambiente.py
+# 5. conferir o ambiente (webcam, FPS, LBPH, KCF, MySQL)
+.venv\Scripts\python.exe verificar_ambiente.py
 ```
+
+> **O passo 2 não termina quando o comando volta.** O `docker compose up -d` devolve o prompt assim que o
+> contêiner sobe, mas o MySQL ainda leva alguns segundos para executar `sql/01` a `sql/03` na primeira vez. Se o
+> passo 4 reclamar de conexão ou de tabela inexistente, espere e repita — não é erro de configuração.
+> Para acompanhar: `docker compose logs -f mysql`, até aparecer *ready for connections*.
 
 > ⚠️ **A armadilha nº 1 do projeto:** é preciso `opencv-contrib-python`. O `opencv-python` comum **não tem
 > `cv2.face`** (LBPH), e os dois no mesmo ambiente conflitam em silêncio. O `requirements.txt` já está correto —
@@ -182,7 +206,12 @@ python verificar_ambiente.py
 > projeto. Na dúvida, chame o interpretador pelo caminho: `.venv\Scripts\python.exe -m pytest`. Para ativar,
 > `.venv\Scripts\Activate.ps1`; se o PowerShell recusar, `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
-Sem Docker, execute `sql/01_schema.sql`, `sql/02_dados_iniciais.sql` e `sql/03_usuarios.sql` como root, nessa ordem.
+Sem Docker, execute `sql/01_schema.sql`, `sql/02_dados_iniciais.sql` e `sql/03_usuarios.sql` como root, nessa
+ordem — e no `.env` troque `DB_PORTA` para **3306**, a porta padrão de um MySQL instalado na máquina. O 3307 do
+`docker-compose.yml` existe justamente para não colidir com ele.
+
+Com tudo pronto, `main.py` abre sem nenhum usuário cadastrado: comece pelo **Painel de gerenciamento**, que pede
+a senha do administrador definida no passo 3, e cadastre as identidades antes de tentar qualquer nível.
 
 ---
 
@@ -192,7 +221,7 @@ Sem Docker, execute `sql/01_schema.sql`, `sql/02_dados_iniciais.sql` e `sql/03_u
 |---|---|
 | `python main.py` | Aplicação completa. Comece pelo **Painel de gerenciamento** e cadastre os usuários |
 | `python esqueleto.py Gustavo Ana` | **Prova das 5 fases sem banco**: captura, treina em memória e reconhece ao vivo mostrando nome, distância, ms e FPS |
-| `python -m pytest` | Os 246 testes (não precisa de câmera; o de integração sobe um banco descartável) |
+| `python -m pytest` | Os 264 testes (não precisa de câmera; o de integração sobe um banco descartável) |
 | `python -m ferramentas verificar-trilha` | Verifica a cadeia de hash e aponta onde ela foi rompida |
 | `python -m ferramentas extrair-marca ARQ.png` | Recupera quem exportou um arquivo, e quando |
 | `python -m ferramentas inspecionar REF ATUAL` | Compara duas fotos de acondicionamento (ORB + SSIM) |
@@ -206,13 +235,14 @@ O `esqueleto.py` é o caminho mais rápido para ver o projeto funcionando: não 
 
 ### Roteiro de demonstração
 
-1. **Painel** → cadastrar um N1, um N2 com UF `SP` e **dois** N3 (a regra dos dois exige duas identidades).
+1. **Painel** → cadastrar um N1, um N2 com UF `SP` e um N3 — mais um **segundo** N3 se for demonstrar a regra
+   dos dois, que precisa de duas identidades distintas (ligue `exigir_segunda_pessoa` antes).
    O **termo de consentimento** aparece antes da câmera, e o aceite só libera depois de o texto poder ser lido
    por inteiro — mostre que "Não concordo" encerra sem coletar nada.
 2. **Nível 1** → só a face → abrir `A1-05`: coordenadas e custódia borradas.
 3. **Nível 2** → mesmo mapa com as coordenadas visíveis → exportar → `extrair-marca` recupera quem exportou.
-4. **Nível 3** → senha forte + face + desafio + segunda pessoa → mapa completo, exportação bloqueada, sessão com
-   tempo-limite.
+4. **Nível 3** → senha forte + face + desafio (+ segunda pessoa, se ligada) → mapa completo, exportação
+   bloqueada, sessão com tempo-limite.
 5. **Negações:** senha errada 3× (bloqueio), face de outra pessoa com a senha certa (credencial alheia), N1
    tentando o N2.
 6. **Adulteração:** alterar um registro de `log_acesso` como root → `verificar-trilha` aponta o `id` exato.
@@ -269,7 +299,7 @@ lgpd/          termo (texto versionado + hash do que foi apresentado)
 interface/     tema (paleta, Cartao, Tabela) · comum (Contexto, Visor, portão admin) · painel
                autenticacao · relatorios · cadastro · termo (consentimento prévio)
 experimentos/  protocolo (divisão por sessão) · metricas (FAR/FRR/EER/DET) · executar · capturar
-testes/        conftest (uma raiz Tk por sessão) · 19 módulos · 246 testes
+testes/        conftest (uma raiz Tk por sessão) · 19 módulos · 264 testes
 sql/           schema com camada causal · dados de referência · contas separadas
 ```
 

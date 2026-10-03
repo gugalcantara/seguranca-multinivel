@@ -95,10 +95,19 @@ def ev_com_senha(nivel, usuario_id):
                       senha_ok=True, senha_forte=nivel == 3)
 
 
-def montar(nivel, analise=None, usuario=None, usuarios_no_banco=(), ev=None):
+def montar(nivel, analise=None, usuario=None, usuarios_no_banco=(), ev=None,
+           exigir_segunda_pessoa=True):
+    """exigir_segunda_pessoa é EXPLÍCITO aqui de propósito.
+
+    O config.ini pode desligar a regra dos dois, e vários testes deste módulo
+    existem para verificar justamente a regra ligada. Deixá-los herdar o valor do
+    arquivo faria a cobertura da regra evaporar em silêncio no dia em que alguém
+    a desligasse — que foi exatamente o que aconteceu quando o padrão mudou.
+    """
     banco = BancoDuble(usuarios_no_banco)
     trilha = TrilhaDuble()
     motor = MotorAutenticacao(banco, None, trilha, configuracao.carregar())
+    motor.exigir_segunda_pessoa = exigir_segunda_pessoa
     motor.pipeline = PipelineDuble(analise or AnaliseDuble())
     tentativa = motor.iniciar_face(nivel, ev or Evidencias(nivel_solicitado=nivel), usuario)
     return motor, tentativa, trilha
@@ -262,3 +271,60 @@ def test_sessao_de_nivel_1_nao_expira():
     motor, _, _ = montar(1, usuarios_no_banco=[{**USUARIO_N2, "id": 7, "nivel_id": 1}])
     sessao = motor.abrir_sessao(Evidencias(nivel_solicitado=1, usuario_id=7))
     assert sessao.expira_em is None
+
+
+# ------------------------------------------------------------------ regra dos dois DESLIGADA
+def test_n3_com_uma_pessoa_concede_quando_a_regra_esta_desligada():
+    """config.ini pode dispensar a segunda pessoa; o resto do N3 continua valendo."""
+    _, tentativa, trilha = montar(3, usuario=USUARIO_N3, ev=ev_com_senha(3, 9),
+                                  exigir_segunda_pessoa=False)
+    tentativa.desafio = DesafioDuble([Estado.CONFIRMADO])
+    status = frames_ate_concluir(tentativa)
+    assert status.decisao.concedido
+
+
+def test_n3_de_uma_pessoa_so_ENTRA_na_trilha():
+    """O furo mais fácil de abrir ao desligar a regra.
+
+    Com a regra ligada, quem registra o desfecho do N3 é concluir_regra_dois().
+    Se ela não roda mais, o registro tem de passar a sair da etapa individual —
+    senão o nível mais sensível do sistema concederia acesso sem deixar rastro,
+    e a trilha mostraria apenas as negativas.
+    """
+    _, tentativa, trilha = montar(3, usuario=USUARIO_N3, ev=ev_com_senha(3, 9),
+                                  exigir_segunda_pessoa=False)
+    tentativa.desafio = DesafioDuble([Estado.CONFIRMADO])
+    frames_ate_concluir(tentativa)
+
+    assert trilha.registros, "acesso de nível 3 concedido sem registro na trilha"
+    assert trilha.registros[-1]["resultado"] == "CONCEDIDO"
+    assert trilha.registros[-1]["nivel_solicitado"] == 3
+
+
+def test_regra_desligada_nao_grava_REGRA_DOIS_como_fator_avaliado():
+    """Registrar um fator que não foi exigido é pior que não registrar nada:
+    a auditoria leria "duas pessoas conferiram" onde houve uma só."""
+    _, tentativa, trilha = montar(3, usuario=USUARIO_N3, ev=ev_com_senha(3, 9),
+                                  exigir_segunda_pessoa=False)
+    tentativa.desafio = DesafioDuble([Estado.CONFIRMADO])
+    frames_ate_concluir(tentativa)
+
+    assert "REGRA_DOIS" not in trilha.registros[-1]["fatores_avaliados"]
+    assert "VIVACIDADE" in trilha.registros[-1]["fatores_avaliados"]   # o resto continua
+
+
+def test_desligar_a_regra_nao_afrouxa_os_demais_fatores_do_n3():
+    """Sem vivacidade, o N3 continua negando — a dispensa é só da segunda pessoa."""
+    _, tentativa, _ = montar(3, usuario=USUARIO_N3, ev=ev_com_senha(3, 9),
+                             exigir_segunda_pessoa=False)
+    tentativa.desafio = DesafioDuble([Estado.EXPIRADO])
+    status = frames_ate_concluir(tentativa)
+    assert not status.decisao.concedido
+
+
+def test_motor_responde_se_ainda_ha_segunda_etapa():
+    """Uma pergunta, um lugar: tela e motor consultam a mesma resposta."""
+    com, _, _ = montar(3, usuario=USUARIO_N3, exigir_segunda_pessoa=True)
+    sem, _, _ = montar(3, usuario=USUARIO_N3, exigir_segunda_pessoa=False)
+    assert com.aguarda_segunda_pessoa(3) and not com.aguarda_segunda_pessoa(2)
+    assert not sem.aguarda_segunda_pessoa(3)

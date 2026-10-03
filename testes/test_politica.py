@@ -1,4 +1,6 @@
 """RF-05, RF-07, RF-08 e princípio de falha segura."""
+import pytest
+
 from autenticacao.politica import ConfirmadorFrames, Evidencias, Motivo, decidir
 
 LIMIARES = {1: 70.0, 2: 60.0, 3: 50.0}
@@ -157,3 +159,42 @@ def test_toda_mensagem_de_negacao_diz_o_que_fazer():
         if motivo in sem_acao:
             continue
         assert any(v in mensagem.lower() for v in verbos), f"{motivo.value} não orienta: {mensagem}"
+
+
+# ------------------------------------------------------------------ regra dos dois desligada
+def test_fatores_do_nivel_remove_a_regra_dos_dois_quando_desligada():
+    from autenticacao.politica import Fator, fatores_do_nivel
+    assert Fator.REGRA_DOIS in fatores_do_nivel(3)
+    assert Fator.REGRA_DOIS not in fatores_do_nivel(3, exigir_segunda_pessoa=False)
+    # os demais fatores do N3 continuam todos lá
+    assert len(fatores_do_nivel(3, exigir_segunda_pessoa=False)) == len(fatores_do_nivel(3)) - 1
+    # e os outros níveis não são tocados
+    assert fatores_do_nivel(1, exigir_segunda_pessoa=False) == fatores_do_nivel(1)
+    assert fatores_do_nivel(2, exigir_segunda_pessoa=False) == fatores_do_nivel(2)
+    assert fatores_do_nivel(9) is None
+
+
+def test_n3_de_uma_pessoa_concede_com_a_regra_desligada():
+    d = decidir(ev_n3(segundo_usuario_id=None), LIMIARES, JANELA, exigir_segunda_pessoa=False)
+    assert d.concedido
+
+
+def test_regra_desligada_nao_lista_REGRA_DOIS_entre_os_fatores_avaliados():
+    """O que a trilha grava precisa refletir o que foi de fato exigido."""
+    d = decidir(ev_n3(segundo_usuario_id=None), LIMIARES, JANELA, exigir_segunda_pessoa=False)
+    assert d.fatores_avaliados == ["SENHA", "SENHA_FORTE", "FACE", "VIVACIDADE"]
+
+
+@pytest.mark.parametrize("quebra, motivo", [
+    ({"senha_ok": False}, Motivo.SENHA_INCORRETA),
+    ({"senha_forte": False}, Motivo.SENHA_FRACA),
+    ({"vivacidade_ok": False}, Motivo.VIVACIDADE_NAO_CONFIRMADA),
+    ({"qualidade_ok": False}, Motivo.QUALIDADE_INSUFICIENTE),
+    ({"usuario_ativo": False}, Motivo.USUARIO_INATIVO),
+    ({"usuario_nivel": 2}, Motivo.NIVEL_INSUFICIENTE),
+])
+def test_desligar_a_regra_nao_afrouxa_nenhum_outro_fator(quebra, motivo):
+    """Dispensar a segunda pessoa não pode virar uma porta lateral para o N3."""
+    d = decidir(ev_n3(segundo_usuario_id=None, **quebra), LIMIARES, JANELA,
+                exigir_segunda_pessoa=False)
+    assert not d.concedido and d.motivo == motivo

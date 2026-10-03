@@ -104,12 +104,27 @@ class MensagensDuble:
         return " ".join(f"{titulo} {texto}" for _, titulo, texto in self.mostradas)
 
 
+class MotorMinimo:
+    """Só o que a tela de autenticação consulta ao se construir.
+
+    A janela pergunta ao motor se o nível ainda terá uma segunda etapa — antes
+    de montar qualquer widget. Um `motor=None` quebraria na construção, longe do
+    que o teste quer verificar.
+    """
+
+    def __init__(self, exigir_segunda_pessoa=True):
+        self.exigir_segunda_pessoa = exigir_segunda_pessoa
+
+    def aguarda_segunda_pessoa(self, nivel):
+        return nivel == 3 and self.exigir_segunda_pessoa
+
+
 # ------------------------------------------------------------------ fixtures
 @pytest.fixture
 def ctx():
     usuarios = UsuariosDuble()
     contexto = Contexto(cfg=configuracao.carregar(), banco=None, trilha=TrilhaDuble(),
-                        reconhecedor=ReconhecedorDuble(), motor=None, acervo=None,
+                        reconhecedor=ReconhecedorDuble(), motor=MotorMinimo(), acervo=None,
                         usuarios=usuarios, consentimentos=ConsentimentosDuble())
     from visao.aquisicao import WebcamIndisponivel
     contexto.camera = lambda: (_ for _ in ()).throw(WebcamIndisponivel("sem câmera no teste"))
@@ -453,8 +468,12 @@ def test_formulario_recusa_entrada_invalida_antes_de_abrir_a_camera(raiz, ctx, m
 class MotorRegraDois:
     """Registra se a tentativa da primeira pessoa chegou a ser encerrada."""
 
-    def __init__(self):
+    def __init__(self, exigir_segunda_pessoa=True):
         self.encerramentos = []
+        self.exigir_segunda_pessoa = exigir_segunda_pessoa
+
+    def aguarda_segunda_pessoa(self, nivel):
+        return nivel == 3 and self.exigir_segunda_pessoa
 
     def concluir_regra_dois(self, ev_a, instante_a, ev_b=None, instante_b=None):
         self.encerramentos.append(ev_a)
@@ -697,3 +716,71 @@ def test_captura_so_sugere_ajuste_depois_de_travar(raiz, ctx, monkeypatch):
     coletor.faces.append(np.zeros((200, 200), np.uint8))  # voltou a avancar
     assert janela._dica_se_travou(coletor) == ""
     janela._cancelar()
+
+
+# ------------------------------------------------------------------ regra dos dois desligada
+def janela_n3(raiz, ctx, exigir_segunda_pessoa):
+    from interface.autenticacao import JanelaAutenticacao
+    ctx.motor = MotorRegraDois(exigir_segunda_pessoa=exigir_segunda_pessoa)
+    janela = JanelaAutenticacao(raiz, ctx, 3, lambda sessao: None)
+    janela.withdraw()
+    return janela
+
+
+def test_faixa_de_etapas_esconde_a_segunda_pessoa_quando_a_regra_esta_desligada(raiz, ctx):
+    """A tela não pode anunciar uma etapa que a decisão não vai cobrar."""
+    from autenticacao.politica import Fator
+    com = janela_n3(raiz, ctx, True)
+    assert Fator.REGRA_DOIS in com.etapas.fatores
+    com.destroy()
+
+    sem = janela_n3(raiz, ctx, False)
+    assert Fator.REGRA_DOIS not in sem.etapas.fatores
+    assert Fator.VIVACIDADE in sem.etapas.fatores        # o resto do N3 continua anunciado
+    assert len(sem.etapas.fatores) == len(com.etapas.fatores) - 1
+
+
+def test_janela_consulta_o_motor_sobre_a_segunda_etapa(raiz, ctx):
+    """Um `nivel == 3` escrito na tela voltaria a divergir da política no dia
+    seguinte; a pergunta tem um dono só."""
+    assert janela_n3(raiz, ctx, True).aguarda_segunda is True
+    assert janela_n3(raiz, ctx, False).aguarda_segunda is False
+
+
+def test_n3_sem_segunda_pessoa_nao_abre_o_formulario_de_espera(raiz, ctx, monkeypatch):
+    """Com a regra desligada, concluir a etapa individual já concede a sessão.
+
+    Antes esta era a bifurcação `if self.nivel < 3`, que mandava TODO N3 esperar
+    por uma segunda pessoa que agora pode não existir — a tela ficaria presa num
+    formulário cujo prazo nunca seria cumprido.
+    """
+    concedidas = []
+    janela = janela_n3(raiz, ctx, False)
+    janela.ao_conceder = concedidas.append
+    monkeypatch.setattr(janela.motor, "abrir_sessao", lambda ev, segundo=None: "sessao-aberta",
+                        raising=False)
+
+    class DecisaoOk:
+        concedido = True
+        mensagem = ""
+
+    janela.tentativa = type("T", (), {"ev": object()})()
+    janela._concluida(DecisaoOk())
+
+    assert concedidas == ["sessao-aberta"]
+    assert janela.primeira_pessoa is None, "não pode ficar aguardando segunda pessoa"
+
+
+def test_cartao_do_nivel_3_na_tela_inicial_acompanha_a_configuracao():
+    """A porta de entrada não pode prometer uma exigência que foi dispensada."""
+    import configparser
+
+    import main
+    cfg = configparser.ConfigParser()
+    cfg.read_dict({"autenticacao": {"exigir_segunda_pessoa": "true"}})
+    assert "segunda pessoa" in main.fatores_do_nivel_3(cfg)
+
+    cfg["autenticacao"]["exigir_segunda_pessoa"] = "false"
+    texto = main.fatores_do_nivel_3(cfg)
+    assert "segunda pessoa" not in texto
+    assert "desafio na câmera" in texto        # o que continua valendo segue anunciado

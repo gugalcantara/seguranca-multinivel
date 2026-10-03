@@ -12,6 +12,11 @@ cumprido. Nunca há caminho em que a falta de informação conceda acesso.
 | 1     | face                                                      | 1:N   |
 | 2     | matrícula + senha, depois face                            | 1:1   |
 | 3     | matrícula + senha forte + face + desafio + regra dos dois | 1:1   |
+
+A regra dos dois do N3 é o ÚNICO fator que o config.ini pode suspender
+(`exigir_segunda_pessoa`), porque é o único que depende de outra pessoa estar
+presente. Suspensa, ela sai da lista de fatores do nível — e não vira um fator
+"cumprido" que não foi. Ver `fatores_do_nivel`.
 """
 from dataclasses import dataclass, field
 from enum import Enum
@@ -30,6 +35,26 @@ FATORES_POR_NIVEL = {
     2: (Fator.SENHA, Fator.FACE),
     3: (Fator.SENHA, Fator.SENHA_FORTE, Fator.FACE, Fator.VIVACIDADE, Fator.REGRA_DOIS),
 }
+
+
+def fatores_do_nivel(nivel, exigir_segunda_pessoa=True):
+    """Fatores que o nível exige, já descontada a regra dos dois quando desligada.
+
+    A regra dos dois é o único fator que o config.ini pode suspender, porque é o
+    único que depende de OUTRA pessoa estar presente — na bancada de
+    desenvolvimento isso trava todo teste do N3.
+
+    Ela sai da lista inteira, não só da verificação: a tela não anuncia uma etapa
+    que não existe, e a trilha não grava REGRA_DOIS entre os fatores avaliados.
+    Registrar um fator que não foi exigido seria pior que não registrar nada —
+    a auditoria leria "duas pessoas conferiram" onde houve uma só.
+    """
+    fatores = FATORES_POR_NIVEL.get(nivel)
+    if fatores is None:
+        return None
+    if exigir_segunda_pessoa:
+        return fatores
+    return tuple(f for f in fatores if f is not Fator.REGRA_DOIS)
 
 
 class Motivo(str, Enum):
@@ -118,14 +143,23 @@ class Decisao:
         return MENSAGENS[self.motivo]
 
 
-def decidir(ev: Evidencias, limiares: dict, janela_regra_dois: float, exigir_regra_dois=True) -> Decisao:
-    """exigir_regra_dois=False avalia UMA pessoa no N3 (etapa individual da regra dos dois)."""
+def decidir(ev: Evidencias, limiares: dict, janela_regra_dois: float, exigir_regra_dois=True,
+            exigir_segunda_pessoa=True) -> Decisao:
+    """Decide o acesso a partir das evidências já coletadas.
+
+    Os dois parâmetros finais parecem redundantes e não são:
+
+    - `exigir_regra_dois=False` avalia UMA pessoa dentro de um N3 que AINDA exige
+      duas — é a etapa individual, que precisa passar antes de a segunda chegar.
+    - `exigir_segunda_pessoa=False` desliga a regra por configuração: o N3 inteiro
+      passa a bastar uma pessoa, e REGRA_DOIS deixa de ser fator do nível.
+    """
     avaliados = []
 
     def negar(motivo):
         return Decisao(False, motivo, avaliados)
 
-    fatores = FATORES_POR_NIVEL.get(ev.nivel_solicitado)
+    fatores = fatores_do_nivel(ev.nivel_solicitado, exigir_segunda_pessoa)
     if fatores is None:
         return negar(Motivo.NIVEL_INVALIDO)
 

@@ -8,6 +8,14 @@ Fluxo:
     N3:  pessoa A: validar_credenciais(senha forte) -> face -> vivacidade -> etapa individual
          pessoa B: idem, dentro da janela -> concluir_regra_dois(A, B)
 
+Com `exigir_segunda_pessoa = false` no config.ini, o N3 termina na etapa
+individual: não há pessoa B, e concluir_regra_dois() não chega a ser chamado.
+Atenção a quem mexer nesse caminho — é concluir_regra_dois() quem registra o
+desfecho do N3 na trilha quando a regra está ligada. Sem ele, o registro precisa
+sair de finalizar_individual(), senão o nível mais sensível do sistema concede
+acesso sem deixar rastro. Quem responde "ainda há segunda etapa?" é
+aguarda_segunda_pessoa().
+
 Toda decisão final passa por politica.decidir() e vai para a trilha encadeada.
 Toda exceção vira NEGADO (falha segura).
 """
@@ -126,6 +134,19 @@ class MotorAutenticacao:
         self.pipeline = PipelineFacial(reconhecedor, self.cfg)
         self.limiares = {n: configuracao.limiar(n) for n in (1, 2, 3)}
         self.janela = self.cfg.getfloat("autenticacao", "janela_regra_dois")
+        # ligada, o N3 só concede com DUAS pessoas; desligada, uma basta (ver config.ini)
+        self.exigir_segunda_pessoa = self.cfg.getboolean(
+            "autenticacao", "exigir_segunda_pessoa", fallback=True)
+
+    def aguarda_segunda_pessoa(self, nivel):
+        """True quando a autenticação deste nível ainda terá uma segunda etapa.
+
+        Um só lugar responde a essa pergunta, e tanto o motor quanto a tela a
+        consultam. Espalhar `nivel == 3` pelo código foi o que fez a regra dos
+        dois ficar difícil de desligar: a condição aparecia escrita de formas
+        diferentes em cada camada.
+        """
+        return nivel == 3 and self.exigir_segunda_pessoa
 
     # ------------------------------------------------------------ etapa 1: conhecimento
     def validar_credenciais(self, nivel, matricula, senha_digitada):
@@ -174,8 +195,18 @@ class MotorAutenticacao:
             if usuario:
                 ev.usuario_nivel = usuario["nivel_id"]
                 ev.usuario_ativo = bool(usuario["ativo"])
-            decisao = politica.decidir(ev, self.limiares, self.janela, exigir_regra_dois=False)
-            if not decisao.concedido or ev.nivel_solicitado < 3:
+            # exigir_segunda_pessoa aqui é redundante POR CONSTRUÇÃO: com
+            # exigir_regra_dois=False o bloco da regra já não roda, e o resultado
+            # é idêntico com qualquer valor. Fica explícito mesmo assim, para que
+            # a chamada continue correta se um dia esta etapa passar a avaliar a
+            # regra — e para que ninguém leia a ausência como "aqui a config não vale".
+            decisao = politica.decidir(ev, self.limiares, self.janela, exigir_regra_dois=False,
+                                       exigir_segunda_pessoa=self.exigir_segunda_pessoa)
+            # No N3 com a regra dos dois LIGADA, o desfecho ainda não existe: quem
+            # registra é concluir_regra_dois(), depois da segunda pessoa. Em todo
+            # outro caso esta é a decisão final e precisa entrar na trilha aqui —
+            # senão um acesso de nível 3 concedido a uma pessoa só não deixaria rastro.
+            if not decisao.concedido or not self.aguarda_segunda_pessoa(ev.nivel_solicitado):
                 self._registrar(ev, decisao, qualidade=qualidade, frame=frame)
             return decisao
         except Exception:
@@ -201,7 +232,8 @@ class MotorAutenticacao:
             ev.segundo_autenticado = politica.decidir(ev_b, self.limiares, self.janela,
                                                       exigir_regra_dois=False).concedido
             ev.segundos_desde_primeiro = instante_b - instante_a
-        decisao = politica.decidir(ev, self.limiares, self.janela)
+        decisao = politica.decidir(ev, self.limiares, self.janela,
+                                   exigir_segunda_pessoa=self.exigir_segunda_pessoa)
         self._registrar(ev, decisao)
         return decisao, (self.abrir_sessao(ev, ev_b) if decisao.concedido else None)
 

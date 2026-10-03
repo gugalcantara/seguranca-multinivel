@@ -3,6 +3,10 @@
 N1: só câmera. N2: matrícula + senha -> câmera. N3: matrícula + senha forte ->
 câmera -> desafio de vivacidade -> repete tudo para a segunda pessoa, dentro da janela.
 
+A última etapa do N3 depende de `exigir_segunda_pessoa` no config.ini. A tela não
+decide isso: pergunta ao motor (`aguarda_segunda_pessoa`), que é o mesmo dono da
+resposta que a política consulta.
+
 A faixa de etapas no topo mostra quais fatores o nível exige e em qual deles a
 tentativa está. A lista sai de FATORES_POR_NIVEL, a MESMA que a política usa
 para decidir — assim a tela nunca anuncia um fator que a decisão não exige, nem
@@ -20,7 +24,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import configuracao
-from autenticacao.politica import FATORES_POR_NIVEL, Fator
+from autenticacao.politica import Fator, fatores_do_nivel
 from interface import tema
 from interface.comum import CORES_NIVEL, NOMES_NIVEL, Visor, desenhar_faces
 from visao.aquisicao import WebcamIndisponivel
@@ -42,9 +46,13 @@ PENDENTE, ATUAL, CUMPRIDA = "pendente", "atual", "cumprida"
 class FaixaEtapas(ttk.Frame):
     """Os fatores do nível, em ordem, com o estado de cada um."""
 
-    def __init__(self, mestre, nivel):
+    def __init__(self, mestre, nivel, exigir_segunda_pessoa=True):
         super().__init__(mestre, style="Superficie.TFrame", padding=(16, 10))
-        self.fatores = [f for f in FATORES_POR_NIVEL.get(nivel, ()) if f in ROTULOS_FATOR]
+        # a faixa sai da MESMA função que a política consulta, agora incluindo a
+        # regra dos dois ligada ou não: a tela nunca anuncia uma etapa que a
+        # decisão não vai cobrar
+        self.fatores = [f for f in fatores_do_nivel(nivel, exigir_segunda_pessoa) or ()
+                        if f in ROTULOS_FATOR]
         self._rotulos = {}
         for coluna, fator in enumerate(self.fatores):
             if coluna:
@@ -132,6 +140,8 @@ class JanelaAutenticacao(tk.Toplevel):
         self.ctx, self.nivel, self.ao_conceder = ctx, nivel, ao_conceder
         self.motor = ctx.motor
         self.janela_dois = ctx.cfg.getfloat("autenticacao", "janela_regra_dois")
+        # quem responde é o motor, não um "nivel == 3" repetido aqui
+        self.aguarda_segunda = self.motor.aguarda_segunda_pessoa(nivel)
         self.title(f"Autenticação — Nível {nivel}")
         self.configure(bg=tema.FUNDO)
         self.withdraw()               # só aparece depois de dimensionada, sem piscar
@@ -144,7 +154,7 @@ class JanelaAutenticacao(tk.Toplevel):
 
         tk.Label(self, text=f"Nível {nivel} — {NOMES_NIVEL[nivel]}", bg=CORES_NIVEL[nivel],
                  fg="white", font=tema.F_TITULO, padx=16, pady=10).pack(fill="x")
-        self.etapas = FaixaEtapas(self, nivel)
+        self.etapas = FaixaEtapas(self, nivel, self.aguarda_segunda)
         self.etapas.pack(fill="x")
 
         # A faixa é o bloco mais largo da tela e o único que não encolhe: em
@@ -153,22 +163,31 @@ class JanelaAutenticacao(tk.Toplevel):
         # faixa quem dita a largura da janela — medida, não chutada.
         self.update_idletasks()
         largura = max(780, self.etapas.winfo_reqwidth() + 40)
-        self.minsize(min(largura, 700), 470)
-        _, altura = tema.ajustar_a_tela(self, largura, 820)
+        self._largura_minima = min(largura, 700)
+        self.minsize(self._largura_minima, 470)
+        self.largura, self.altura_com_video = tema.ajustar_a_tela(self, largura, 820)
+        altura = self.altura_com_video
 
         self.formulario = ttk.Frame(self, padding=16)
+        # a coluna dos campos é quem estica: com `width` em caracteres, a
+        # matrícula (fonte de código) e a senha (fonte normal) terminavam com
+        # larguras diferentes e a tela ficava visivelmente torta
+        self.formulario.columnconfigure(1, weight=1, minsize=260)
         self.titulo_form = ttk.Label(self.formulario, style="Forte.TLabel")
         self.titulo_form.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
         ttk.Label(self.formulario, text="Matrícula").grid(row=1, column=0, sticky="w", padx=(0, 10))
-        self.matricula = ttk.Entry(self.formulario, width=26, font=tema.F_CODIGO)
-        self.matricula.grid(row=1, column=1, pady=3)
+        self.matricula = ttk.Entry(self.formulario, font=tema.F_CODIGO)
+        self.matricula.grid(row=1, column=1, pady=3, sticky="ew")
         ttk.Label(self.formulario, text="Senha").grid(row=2, column=0, sticky="w", padx=(0, 10))
-        self.senha = ttk.Entry(self.formulario, width=26, show="•")
-        self.senha.grid(row=2, column=1, pady=3)
+        self.senha = ttk.Entry(self.formulario, show="•")
+        self.senha.grid(row=2, column=1, pady=3, sticky="ew")
         self.senha.bind("<Return>", lambda _: self._continuar())
         self.matricula.bind("<Return>", lambda _: self.senha.focus_set())
         ttk.Button(self.formulario, text="Continuar", style="Acento.TButton",
                    command=self._continuar).grid(row=3, column=1, sticky="e", pady=(10, 0))
+        ttk.Label(self.formulario, style="Detalhe.TLabel",
+                  text="A matrícula é o código do crachá, como R0902G8.").grid(
+            row=4, column=1, sticky="w", pady=(8, 0))
 
         # Botões e mensagem são ancorados na BASE antes do vídeo existir. O vídeo
         # é o único elemento elástico da tela; empacotado primeiro, ele empurraria
@@ -215,6 +234,26 @@ class JanelaAutenticacao(tk.Toplevel):
         self.formulario.pack(fill="x")
         self.matricula.focus_set()
         self._mensagem("", None)
+        self._altura_conforme_o_conteudo(com_video=False)
+
+    def _altura_conforme_o_conteudo(self, com_video):
+        """A janela encolhe quando mostra só o formulário.
+
+        A altura é dimensionada para caber o vídeo, que é o elemento alto. Nas
+        etapas de digitação isso deixava dois terços da janela vazios, com o
+        «Cancelar» sozinho lá embaixo, longe do «Continuar» — parecendo que
+        faltava algo na tela. Encolher mantém os dois botões no campo de visão.
+        """
+        if com_video:
+            self.minsize(self._largura_minima, 470)
+            return self.geometry(f"{self.largura}x{self.altura_com_video}")
+        self.update_idletasks()
+        # o piso também acompanha: um mínimo pensado para caber vídeo deixaria a
+        # janela do formulário parada numa altura que ela não usa
+        necessaria = sum(filho.winfo_reqheight() for filho in self.pack_slaves()) + 24
+        alta = min(necessaria, self.altura_com_video)
+        self.minsize(self._largura_minima, min(alta, 470))
+        self.geometry(f"{self.largura}x{alta}")
 
     def _continuar(self):
         usuario, ev, negada = self.motor.validar_credenciais(self.nivel, self.matricula.get().strip(),
@@ -230,6 +269,7 @@ class JanelaAutenticacao(tk.Toplevel):
         self.medidor.limpar()
         self.medidor.pack(side="bottom", fill="x", padx=8, pady=8)
         self.visor.pack(padx=8, pady=(8, 0), expand=True)
+        self._altura_conforme_o_conteudo(com_video=True)
         self.etapas.marcar(Fator.FACE)
         try:
             self.ctx.camera()
@@ -270,7 +310,7 @@ class JanelaAutenticacao(tk.Toplevel):
             return self._conceder(sessao) if sessao else self._negar(final.mensagem, ev)
         if not decisao.concedido:
             return self._negar(decisao.mensagem, ev)
-        if self.nivel < 3:
+        if not self.aguarda_segunda:
             return self._conceder(self.motor.abrir_sessao(ev))
         self.primeira_pessoa = (ev, time.monotonic())
         self.etapas.marcar(Fator.REGRA_DOIS)

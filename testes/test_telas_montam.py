@@ -35,9 +35,10 @@ from testes.test_painel import BancoDuble, ReconhecedorDuble, TrilhaDuble   # no
 @pytest.fixture
 def ctx():
     from dados.repositorio import RepositorioUsuarios
+    from testes.test_fluxos_de_uso import MotorMinimo
     banco = BancoDuble()
     return Contexto(cfg=configuracao.carregar(), banco=banco, trilha=TrilhaDuble(),
-                    reconhecedor=ReconhecedorDuble(), motor=None, acervo=None,
+                    reconhecedor=ReconhecedorDuble(), motor=MotorMinimo(), acervo=None,
                     usuarios=RepositorioUsuarios(banco), consentimentos=None)
 
 
@@ -146,7 +147,8 @@ def test_autenticacao_fecha_mesmo_com_construcao_interrompida(raiz, ctx, monkeyp
 
     monkeypatch.setattr("interface.autenticacao.Visor",
                         lambda *a, **k: (_ for _ in ()).throw(Explode("falha simulada")))
-    ctx.motor = object()
+    # o mínimo que a janela consulta antes de montar os widgets
+    ctx.motor = type("MotorMinimo", (), {"aguarda_segunda_pessoa": lambda self, n: False})()
     with pytest.raises(Explode):
         JanelaAutenticacao(raiz, ctx, 1, lambda sessao: None)
 

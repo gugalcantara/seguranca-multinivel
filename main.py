@@ -59,10 +59,23 @@ NIVEIS = {
     2: ("matrícula e senha, depois a face",
         "registros completos da sua região, com endereço e responsável",
         "exportação com marca d'água invisível"),
-    3: ("senha forte, face, desafio na câmera e uma segunda pessoa",
+    3: ("senha forte, face e desafio na câmera",
         "visão nacional consolidada, incluindo pontos de custódia",
         "exportação bloqueada — somente visualização"),
 }
+
+
+def fatores_do_nivel_3(cfg):
+    """O texto do cartão do N3 acompanha a regra dos dois ligada ou não.
+
+    A porta de entrada anuncia o que cada nível exige. Deixar "e uma segunda
+    pessoa" fixo no texto faria a tela prometer uma exigência que a configuração
+    pode ter dispensado — e a primeira coisa que um sistema de controle de acesso
+    não pode fazer é descrever errado o próprio controle.
+    """
+    if cfg.getboolean("autenticacao", "exigir_segunda_pessoa", fallback=True):
+        return NIVEIS[3][0] + " e uma segunda pessoa"
+    return NIVEIS[3][0]
 
 
 class TelaInicial(ttk.Frame):
@@ -80,6 +93,8 @@ class TelaInicial(ttk.Frame):
         cartoes.pack(fill="both", expand=True)
         for coluna, nivel in enumerate((1, 2, 3)):
             fatores, alcance, exportacao = NIVEIS[nivel]
+            if nivel == 3:
+                fatores = fatores_do_nivel_3(ctx.cfg)
             cartao = tema.CartaoNivel(cartoes, nivel, NOMES_NIVEL[nivel], fatores, alcance,
                                       exportacao, lambda n=nivel: self._autenticar(n))
             cartao.grid(row=0, column=coluna, sticky="nsew", padx=(0 if not coluna else 10, 0))
