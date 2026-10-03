@@ -15,7 +15,8 @@ from dados.auditoria import GENESIS, calcular_hash, novo_registro
 from dados.repositorio import RepositorioUsuarios
 import configuracao
 
-tkinter = pytest.importorskip("tkinter")
+# o módulo inteiro depende de Tk; a raiz em si vem do conftest
+pytest.importorskip("tkinter")
 
 from interface import tema                                  # noqa: E402
 from interface.comum import Contexto                         # noqa: E402
@@ -133,32 +134,8 @@ class TrilhaDuble:
         return len(self.registros)
 
 
-@pytest.fixture(scope="module")
-def raiz():
-    """Uma única raiz Tk para todo o módulo.
-
-    Criar e destruir vários Tk() no mesmo processo faz o ttk::ThemeChanged
-    tentar gerar evento em widgets de janelas já destruídas ("application has
-    been destroyed"), porque o ttk::Style guarda estado global no interpretador
-    Tcl. Isso tornava a criação seguinte instável. Um interpretador só, com o
-    tema aplicado uma única vez, resolve.
-    """
-    try:
-        janela = tkinter.Tk()
-    except tkinter.TclError as erro:
-        pytest.skip(f"Tk indisponível neste ambiente: {erro}")
-    janela.withdraw()
-    tema.aplicar(janela)
-    yield janela
-    janela.destroy()
-
-
-@pytest.fixture(autouse=True)
-def limpar_janelas(raiz):
-    """Fecha os painéis abertos pelo teste, para que um não veja o widget do outro."""
-    yield
-    for filho in raiz.winfo_children():
-        filho.destroy()
+# a raiz Tk e a limpeza das janelas vivem em testes/conftest.py: um interpretador
+# para a sessão inteira, porque criar e destruir vários Tk() quebra o ttk::Style
 
 
 def montar(raiz, banco=None, reconhecedor=None):
@@ -298,3 +275,71 @@ def test_ficha_mostra_o_registro_selecionado(raiz):
     painel._selecionar_usuario(None)
     assert painel.ficha._valores["nome"].cget("text") == "—"
     assert str(painel.botao_situacao.cget("state")) == "disabled"
+
+
+# ------------------------------------------------------------------ revogação (LGPD art. 8º, §5º)
+class ConsentimentosDuble:
+    """Registra a ORDEM das chamadas, que é o que importa aqui."""
+
+    def __init__(self, ordem, falhar=False):
+        self.ordem = ordem
+        self.falhar = falhar
+
+    def revogar(self, usuario_id, momento=None):
+        self.ordem.append("revogar")
+        if self.falhar:
+            raise RuntimeError("banco caiu no meio da revogação")
+        return 1
+
+
+def montar_com_revogacao(raiz, monkeypatch, falhar=False):
+    painel, ctx, banco = montar(raiz)
+    ordem = []
+    ctx.consentimentos = ConsentimentosDuble(ordem, falhar=falhar)
+    original = ctx.usuarios.definir_ativo
+
+    def definir_ativo(usuario_id, ativo):
+        ordem.append("desativar")
+        return original(usuario_id, ativo)
+
+    monkeypatch.setattr(ctx.usuarios, "definir_ativo", definir_ativo)
+    monkeypatch.setattr("interface.painel.messagebox.askyesno", lambda *a, **k: True)
+    monkeypatch.setattr("interface.painel.messagebox.showinfo", lambda *a, **k: None)
+    monkeypatch.setattr("interface.painel.messagebox.showerror", lambda *a, **k: None)
+    return painel, ctx, ordem
+
+
+def test_revogar_consentimento_desativa_ANTES_de_revogar(raiz, monkeypatch):
+    """A ordem é a própria salvaguarda.
+
+    Revogando primeiro, uma falha ao desativar deixaria o cadastro ATIVO com o
+    consentimento já baixado — tratamento de dado biométrico sem base legal,
+    exatamente o que este botão existe para impedir. Na ordem correta, o pior
+    desfecho é um cadastro inativo com consentimento vivo: reversível.
+    """
+    painel, ctx, ordem = montar_com_revogacao(raiz, monkeypatch)
+    selecionar(raiz, painel, 0)                          # Caio Lima, ativo
+
+    painel._revogar_consentimento()
+    assert ordem == ["desativar", "revogar"]
+    assert ctx.trilha.registros[-1]["motivo"] == "CONSENTIMENTO_REVOGADO"
+
+
+def test_falha_na_revogacao_nao_registra_desfecho_falso_na_trilha(raiz, monkeypatch):
+    """Se a revogação não concluiu, a trilha não pode dizer que concluiu."""
+    painel, ctx, ordem = montar_com_revogacao(raiz, monkeypatch, falhar=True)
+    antes = len(ctx.trilha.registros)
+    selecionar(raiz, painel, 0)
+
+    painel._revogar_consentimento()
+    motivos = [r["motivo"] for r in ctx.trilha.registros[antes:]]
+    assert "CONSENTIMENTO_REVOGADO" not in motivos
+
+
+def test_revogar_sem_selecionar_ninguem_nao_faz_nada(raiz, monkeypatch):
+    painel, ctx, ordem = montar_com_revogacao(raiz, monkeypatch)
+    painel.tabela_usuarios.arvore.selection_remove(
+        *painel.tabela_usuarios.arvore.selection())
+
+    painel._revogar_consentimento()
+    assert ordem == []

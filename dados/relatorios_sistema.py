@@ -1,6 +1,7 @@
 """Relatórios do sistema S-01 a S-07 (Catálogo de Relatórios). Acesso: administrador."""
 from dados.auditoria import TrilhaAuditoria
-from dados.repositorio import RepositorioBloqueio, RepositorioUsuarios
+from dados.repositorio import (RepositorioBloqueio, RepositorioConsentimento,
+                               RepositorioUsuarios)
 
 
 class RelatoriosSistema:
@@ -32,6 +33,10 @@ class RelatoriosSistema:
             "FROM log_acesso WHERE evento = 'AUTENTICACAO' "
             "GROUP BY nivel_solicitado, resultado, motivo ORDER BY nivel, resultado, eventos DESC")
 
+    def consentimentos(self):
+        """Evidência de conformidade: quem consentiu, quando e com qual versão do termo."""
+        return RepositorioConsentimento(self.banco).listar()
+
     def s06_galeria_biometrica(self):
         return RepositorioUsuarios(self.banco).listar()
 
@@ -55,10 +60,6 @@ class RelatoriosSistema:
         return self.banco.consultar(
             "SELECT COUNT(*) AS amostras, COUNT(DISTINCT usuario_id) AS identidades, "
             "ROUND(AVG(qualidade), 3) AS qualidade_media FROM amostra")[0]
-
-    def resumo_trilha(self):
-        return self.banco.consultar(
-            "SELECT COUNT(*) AS registros, MAX(momento) AS ultimo FROM log_acesso")[0]
 
     def contagem_negadas(self, horas=24):
         return self.banco.consultar(

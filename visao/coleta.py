@@ -48,10 +48,6 @@ class ColetorAmostras:
     def completa(self):
         return len(self.faces) >= self.alvo
 
-    @property
-    def valida(self):
-        return len(self.faces) >= self.minimo
-
     def descartar_imagens(self):
         """Chamado após o treino: nenhuma imagem bruta persiste (ETP 4.3)."""
         self.faces.clear()

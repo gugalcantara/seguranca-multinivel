@@ -5,8 +5,9 @@ quem está cadastrado, quantas amostras cada identidade tem, o que foi negado
 nas últimas horas, se a trilha encadeada continua íntegra e se o modelo LBPH
 cifrado foi carregado.
 
-O acesso hoje é a senha de administrador (ETP 4.5). A intenção é que o painel
-passe a ser exclusivo do desenvolvedor; quando isso mudar, o portão a alterar é
+O acesso hoje é a senha de administrador (ETP 4.5), sujeita ao mesmo contador de
+bloqueio do login comum e registrada na trilha. A intenção é que o painel passe a
+ser exclusivo do desenvolvedor; quando isso mudar, o portão a alterar é
 exigir_administrador(), em interface/comum.py — não este arquivo.
 
 Nenhum SQL mora aqui: tudo vem de dados/relatorios_sistema.py e dos
@@ -15,13 +16,17 @@ repositórios, como no resto da interface.
 import logging
 import tkinter as tk
 from datetime import datetime
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
+import cv2
+
+from acervo import marca_dagua
+from acervo.inspecao import inspecionar
 from dados.auditoria import novo_registro
 from dados.relatorios_sistema import RelatoriosSistema
 from interface import tema
 from interface.cadastro import DialogoNovoUsuario
-from interface.comum import exigir_administrador
+from interface.comum import Visor, exigir_administrador
 from interface.tema import Coluna
 
 def _situacao(valor):
@@ -62,9 +67,70 @@ CAMPOS_FICHA = [
     ("criado_em", "Cadastrado em", None), ("id", "Rótulo no LBPH", None),
 ]
 
+# Catálogo de relatórios do sistema: título, colunas e de onde vêm os dados.
+# Antes isto vivia em duas telas — aqui em tabela, na administração em texto de
+# largura fixa. Uma fonte só evita que as duas divirjam.
+RELATORIOS = {
+    "S-01": ("S-01 · Log de acessos", [
+        Coluna("id", "Id", 6, "e"), Coluna("momento", "Momento", 20),
+        Coluna("evento", "Evento", 14), Coluna("nivel", "Nível", 6, "center"),
+        Coluna("usuario_id", "Usuário", 8, "center"),
+        Coluna("usuario2_id", "2ª pessoa", 9, "center"),
+        Coluna("item_id", "Item", 6, "center"), Coluna("resultado", "Resultado", 11),
+        Coluna("motivo", "Motivo", 26, "w", elastica=True),
+        Coluna("distancia", "Distância", 10, "e"),
+    ], lambda r: r.s01_log_acessos()),
+    "S-02": ("S-02 · Tentativas negadas", [
+        Coluna("id", "Id", 6, "e"), Coluna("momento", "Momento", 20),
+        Coluna("nivel", "Nível", 6, "center"), Coluna("matricula", "Matrícula informada", 18),
+        Coluna("usuario_id", "Usuário", 8, "center"),
+        Coluna("motivo", "Motivo", 26, "w", elastica=True),
+        Coluna("distancia", "Distância", 10, "e"),
+        Coluna("foto", "Foto", 6, "center", formato=lambda v: "sim" if v else "—"),
+        Coluna("expira_em", "Expira em", 20),
+    ], lambda r: r.s02_tentativas_negadas()),
+    "S-03": ("S-03 · Bloqueios ativos", [
+        Coluna("matricula", "Matrícula", 18, "w", elastica=True),
+        Coluna("bloqueado_ate", "Bloqueada até", 20),
+    ], lambda r: r.s03_bloqueios_ativos()),
+    "S-05": ("S-05 · Estatísticas de reconhecimento", [
+        Coluna("nivel", "Nível", 6, "center"), Coluna("resultado", "Resultado", 11),
+        Coluna("motivo", "Motivo", 26, "w", elastica=True),
+        Coluna("eventos", "Eventos", 8, "e"),
+        Coluna("distancia_media", "Distância média", 14, "e"),
+        Coluna("qualidade_media", "Qualidade média", 14, "e"),
+    ], lambda r: r.s05_estatisticas_reconhecimento()),
+    "S-06": ("S-06 · Galeria biométrica", [
+        Coluna("id", "Id", 5, "e"), Coluna("matricula", "Matrícula", 12),
+        Coluna("nome", "Nome", 26, "w", elastica=True),
+        Coluna("nivel_id", "Nível", 6, "center"), Coluna("uf", "UF", 5, "center"),
+        Coluna("amostras", "Amostras", 9, "center"),
+        Coluna("ativo", "Situação", 9, "center", formato=_situacao),
+        Coluna("criado_em", "Cadastrado em", 20),
+    ], lambda r: r.s06_galeria_biometrica()),
+    "LGPD": ("LGPD · Consentimentos registrados", [
+        Coluna("id", "Id", 5, "e"),
+        Coluna("titular_nome", "Titular", 24, "w", elastica=True),
+        Coluna("matricula", "Matrícula", 12),
+        Coluna("versao_termo", "Versão", 8, "center"),
+        Coluna("momento", "Aceite em", 20),
+        Coluna("revogado_em", "Revogado em", 20,
+               formato=lambda v: tema.formatar(v) if v else "—"),
+        Coluna("hash_termo", "Texto (SHA-256)", 18, "w",
+               formato=lambda v: (v[:16] + "…") if v else "—"),
+    ], lambda r: r.consentimentos()),
+    "S-07": ("S-07 · Auditoria de exportação", [
+        Coluna("id", "Id", 6, "e"), Coluna("momento", "Momento", 20),
+        Coluna("usuario_id", "Usuário", 8, "center"),
+        Coluna("nome", "Nome", 22, "w", elastica=True),
+        Coluna("nivel", "Nível", 6, "center"), Coluna("item", "Item", 10),
+        Coluna("resultado", "Resultado", 11), Coluna("motivo", "Motivo", 24),
+    ], lambda r: r.s07_auditoria_exportacao()),
+}
+
 
 def abrir_painel(mestre, ctx):
-    if exigir_administrador(mestre):
+    if exigir_administrador(mestre, ctx):
         JanelaPainel(mestre, ctx)
 
 
@@ -104,10 +170,8 @@ class JanelaPainel(tk.Toplevel):
         self.title("Painel de gerenciamento")
         # dimensão relativa à tela: um tamanho fixo em pixels fica apertado em
         # monitor com escala de DPI, onde as fontes ocupam mais espaço
-        largura = min(1380, int(self.winfo_screenwidth() * 0.92))
-        altura = min(900, int(self.winfo_screenheight() * 0.86))
-        self.geometry(f"{largura}x{altura}")
         self.minsize(900, 600)
+        tema.ajustar_a_tela(self, 1380, 900)
         self.configure(bg=tema.FUNDO)
         self.status = tema.cabecalho(self, "Painel de gerenciamento",
                                      "Monitoramento do protótipo — APS PIVC 2026/2")
@@ -116,7 +180,104 @@ class JanelaPainel(tk.Toplevel):
         abas.pack(fill="both", expand=True, padx=10, pady=10)
         abas.add(self._aba_visao_geral(abas), text="Visão geral")
         abas.add(self._aba_usuarios(abas), text="Usuários")
+        abas.add(self._aba_relatorios(abas), text="Relatórios do sistema")
+        abas.add(self._aba_ferramentas(abas), text="Ferramentas")
         self.atualizar()
+
+    # ------------------------------------------------------------ relatórios S-0x
+    def _aba_relatorios(self, abas):
+        quadro = ttk.Frame(abas, padding=12)
+        barra = ttk.Frame(quadro)
+        barra.pack(fill="x", pady=(0, 10))
+        for chave in RELATORIOS:
+            ttk.Button(barra, text=chave, width=7,
+                       command=lambda c=chave: self._mostrar_relatorio(c)).pack(side="left", padx=2)
+        ttk.Button(barra, text="S-04 · Verificar integridade", style="Acento.TButton",
+                   command=self._verificar_integridade).pack(side="left", padx=(12, 0))
+
+        self.titulo_relatorio = ttk.Label(quadro, text="Escolha um relatório.", style="Secao.TLabel")
+        self.titulo_relatorio.pack(anchor="w", pady=(0, 5))
+        self.area_relatorio = ttk.Frame(quadro)
+        self.area_relatorio.pack(fill="both", expand=True)
+        self.tabela_relatorio = None
+        return quadro
+
+    def _mostrar_relatorio(self, chave):
+        """Recria a tabela a cada relatório: cada um tem o seu conjunto de colunas."""
+        titulo, colunas, consulta = RELATORIOS[chave]
+        linhas = self._seguro(lambda: consulta(self.relatorios), []) or []
+        if self.tabela_relatorio is not None:
+            self.tabela_relatorio.destroy()
+        self.tabela_relatorio = tema.Tabela(
+            self.area_relatorio, colunas, altura=18,
+            tag_por_linha=lambda l: "negado" if l.get("resultado") == "NEGADO" else None)
+        self.tabela_relatorio.configurar_tag("negado", foreground=tema.ERRO)
+        self.tabela_relatorio.pack(fill="both", expand=True)
+        self.tabela_relatorio.preencher(linhas)
+        self.titulo_relatorio.configure(text=f"{titulo.upper()} — {len(linhas)} registro(s)")
+
+    def _verificar_integridade(self):
+        """S-04 não é tabela: é um veredito sobre a cadeia inteira."""
+        resultado = self._seguro(self.relatorios.s04_integridade)
+        if resultado is None:
+            return messagebox.showwarning("S-04", "Não foi possível ler a trilha.", parent=self)
+        if resultado.integra:
+            messagebox.showinfo("S-04 · Integridade da trilha",
+                                f"CADEIA ÍNTEGRA\n\n{resultado.total} registros verificados.",
+                                parent=self)
+        else:
+            messagebox.showerror("S-04 · Integridade da trilha",
+                                 f"RUPTURA DETECTADA\n\nRegistro id={resultado.id_ruptura}\n"
+                                 f"Tipo: {resultado.tipo}\n\n{resultado.detalhe}", parent=self)
+        self._atualizar_cartoes(self._seguro(self.ctx.usuarios.listar, []) or [])
+
+    # ------------------------------------------------------------ ferramentas
+    def _aba_ferramentas(self, abas):
+        quadro = ttk.Frame(abas, padding=12)
+        barra = ttk.Frame(quadro)
+        barra.pack(fill="x")
+        ttk.Button(barra, text="Extrair marca d'água de um arquivo",
+                   command=self._extrair_marca).pack(side="left", padx=(0, 6))
+        ttk.Button(barra, text="Inspecionar acondicionamento",
+                   command=self._inspecionar).pack(side="left")
+        self.resultado_ferramenta = ttk.Label(quadro, style="Forte.TLabel")
+        self.resultado_ferramenta.pack(anchor="w", pady=10)
+        tema.quebrar_com_a_janela(self.resultado_ferramenta, self, margem=80)
+        self.visor_ferramenta = Visor(quadro, 1000, 520)
+        self.visor_ferramenta.pack()
+        return quadro
+
+    def _extrair_marca(self):
+        caminho = filedialog.askopenfilename(
+            parent=self, title="Arquivo exportado",
+            filetypes=[("Imagens", "*.png *.jpg *.jpeg"), ("Todos", "*.*")])
+        if not caminho:
+            return
+        imagem = cv2.imread(caminho)
+        if imagem is None:
+            return self.resultado_ferramenta.configure(text="Não foi possível abrir a imagem.")
+        marca = marca_dagua.extrair(imagem)
+        self.resultado_ferramenta.configure(
+            text="Nenhuma marca recuperável neste arquivo." if marca is None else
+            f"Marca {marca[0].upper()} — exportado pelo usuário {marca[1]} "
+            f"em {marca[2]:%d/%m/%Y às %H:%M:%S}")
+        self.visor_ferramenta.mostrar(imagem)
+
+    def _inspecionar(self):
+        referencia = filedialog.askopenfilename(parent=self, title="Foto de REFERÊNCIA")
+        atual = referencia and filedialog.askopenfilename(parent=self, title="Foto ATUAL")
+        if not atual:
+            return
+        ref, atu = cv2.imread(referencia), cv2.imread(atual)
+        if ref is None or atu is None:
+            return self.resultado_ferramenta.configure(text="Não foi possível abrir as imagens.")
+        r = inspecionar(ref, atu)
+        self.resultado_ferramenta.configure(
+            text=f"{'ALTERAÇÃO DETECTADA' if r.alterado else 'Sem alteração'} — SSIM {r.similaridade:.4f}, "
+                 f"{len(r.regioes)} região(ões), alinhamento "
+                 f"{'ok (' + str(r.correspondencias) + ' correspondências)' if r.alinhado else 'FALHOU'}",
+            foreground=tema.ERRO if r.alterado else tema.OK)
+        self.visor_ferramenta.mostrar(r.mapa_diferenca)
 
     # ------------------------------------------------------------ visão geral
     def _aba_visao_geral(self, abas):
@@ -167,6 +328,9 @@ class JanelaPainel(tk.Toplevel):
         self.botao_situacao = ttk.Button(barra, text="Desativar", state="disabled",
                                         command=self._alternar_situacao)
         self.botao_situacao.pack(side="left", padx=6)
+        self.botao_revogar = ttk.Button(barra, text="Revogar consentimento", state="disabled",
+                                        command=self._revogar_consentimento)
+        self.botao_revogar.pack(side="left")
         ttk.Button(barra, text="Atualizar", command=self.atualizar).pack(side="right")
 
         corpo = ttk.Frame(quadro)
@@ -194,6 +358,7 @@ class JanelaPainel(tk.Toplevel):
 
     def _selecionar_usuario(self, usuario):
         self.ficha.mostrar(usuario)
+        self.botao_revogar.configure(state="normal" if usuario else "disabled")
         if not usuario:
             self.botao_situacao.configure(state="disabled", text="Desativar", style="TButton")
             return
@@ -218,6 +383,52 @@ class JanelaPainel(tk.Toplevel):
             "CADASTRO", usuario["nivel_id"], "CONCEDIDO",
             "USUARIO_DESATIVADO" if ativo else "USUARIO_REATIVADO", usuario_id=usuario["id"]))
         self.atualizar()
+
+    def _revogar_consentimento(self):
+        """Direito do titular de revogar o consentimento (LGPD art. 8º, §5º).
+
+        A revogação retira a base legal do tratamento, então o cadastro é
+        desativado junto — manter o acesso ativo com o consentimento revogado
+        seria tratar dado sensível sem amparo. As amostras já absorvidas pelo
+        modelo exigem regeneração, e o aviso diz isso em vez de fingir que o
+        clique resolveu tudo.
+        """
+        usuario = self.tabela_usuarios.selecionada()
+        if not usuario:
+            return
+        if not messagebox.askyesno(
+                "Revogar consentimento",
+                f"Revogar o consentimento de {usuario['nome']} ({usuario['matricula']})?\n\n"
+                "O cadastro será desativado, porque sem consentimento não há base legal "
+                "para o tratamento do dado biométrico (LGPD art. 11, I).\n\n"
+                "As amostras já incorporadas ao modelo LBPH exigem regeneração do "
+                "modelo para serem efetivamente removidas.", parent=self):
+            return
+        # A ORDEM importa: desativar vem PRIMEIRO. Se a revogação falhasse depois
+        # de desativar, o pior resultado é um cadastro inativo com consentimento
+        # vivo — chato, e reversível. Na ordem inversa, uma falha ao desativar
+        # deixaria o cadastro ATIVO com o consentimento já revogado: tratamento
+        # de dado biométrico sem base legal, exatamente o que este botão existe
+        # para impedir.
+        try:
+            if bool(usuario["ativo"]):
+                self.ctx.usuarios.definir_ativo(usuario["id"], False)
+            baixados = self.ctx.consentimentos.revogar(usuario["id"])
+        except Exception as erro:
+            self.atualizar()
+            return messagebox.showerror(
+                "Revogar", f"Não foi possível concluir a revogação.\n{erro}\n\n"
+                           "Confira a situação do cadastro na lista antes de tentar de novo.",
+                parent=self)
+        self.ctx.trilha.registrar(novo_registro(
+            "CADASTRO", usuario["nivel_id"], "CONCEDIDO", "CONSENTIMENTO_REVOGADO",
+            usuario_id=usuario["id"]))
+        self.atualizar()
+        messagebox.showinfo(
+            "Consentimento revogado",
+            f"{baixados} consentimento(s) baixado(s) e cadastro desativado.\n\n"
+            "Para eliminar as amostras do modelo, regenere-o sem esta identidade.",
+            parent=self)
 
     # ------------------------------------------------------------ carga dos dados
     def atualizar(self):

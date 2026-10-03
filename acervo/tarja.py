@@ -43,13 +43,22 @@ def _recorte(imagem, r):
 
 
 def suprimir(imagem, regiao, cfg=None):
-    """Suprime a região in-place."""
+    """Suprime a região in-place.
+
+    O método depende do que a região carrega. Para TEXTO, o borrão gaussiano
+    basta: o conteúdo fica ilegível. Para POSIÇÃO — os pontos de um mapa — não
+    basta: o gaussiano preserva o centroide, e o pico do resíduo de cor ainda
+    aponta o lugar exato. Rótulos listados em [tarja] rotulos_supressao_total
+    recebem supressão sólida, que apaga a estrutura espacial.
+    """
     cfg = cfg or configuracao.carregar()
     janela = _recorte(imagem, regiao)
     if janela is None:
         return
     roi = imagem[janela]
     metodo = cfg.get("tarja", "metodo")
+    if regiao.rotulo in cfg.getlista("tarja", "rotulos_supressao_total"):
+        metodo = "solido"
     if metodo == "pixelizacao":
         bloco = cfg.getint("tarja", "bloco_pixelizacao")
         h, w = roi.shape[:2]

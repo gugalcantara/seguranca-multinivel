@@ -19,14 +19,28 @@ def gerar_hash(senha, custo=CUSTO):
     return bcrypt.hashpw(dados, bcrypt.gensalt(rounds=custo)).decode("ascii")
 
 
+# Hash de uma cadeia aleatória que ninguém conhece. Serve de alvo quando não há
+# hash real a comparar — ver verificar().
+HASH_FICTICIO = "$2b$12$vXC.KNpfOt4A72b61ErNCO3oPIhxuy12JfUKQyjQA1IyKBDes8gEW"
+
+
 def verificar(senha, senha_hash):
-    """True só se a senha confere. Qualquer anomalia (hash nulo/corrompido) -> False."""
-    if not senha or not senha_hash:
+    """True só se a senha confere. Qualquer anomalia (hash nulo/corrompido) -> False.
+
+    Sem hash real — matrícula inexistente — a comparação roda mesmo assim, contra
+    o HASH_FICTICIO. O motivo é tempo: o bcrypt custa ~240 ms de propósito, e
+    devolver "não existe" em ~26 ms entrega quais matrículas estão cadastradas a
+    quem apenas cronometra as respostas. O bloqueio por tentativas não cobre esse
+    ataque, porque basta UMA tentativa por matrícula para medir.
+    """
+    if not senha:
         return False
     try:
-        return bcrypt.checkpw(senha.encode("utf-8"), senha_hash.encode("ascii"))
+        confere = bcrypt.checkpw(senha.encode("utf-8"),
+                                 (senha_hash or HASH_FICTICIO).encode("ascii"))
     except (ValueError, TypeError):
         return False
+    return confere and bool(senha_hash)
 
 
 def avaliar_senha_forte(senha, minimo):

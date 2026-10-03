@@ -182,3 +182,54 @@ def test_entrega_registra_e_n3_nao_exporta(acervo_importado, banco):
     ultimos = banco.consultar("SELECT evento, resultado, motivo FROM log_acesso ORDER BY id DESC LIMIT 3")
     assert [u["motivo"] for u in ultimos] == ["ACESSO_NEGADO_ITEM", "EXPORTACAO_BLOQUEADA_N3", "CONCEDIDO"]
     assert trilha.verificar().integra
+
+
+# ------------------------------------------------------------------ LGPD
+def test_consentimento_e_registrado_e_vinculado_ao_usuario(banco):
+    """Art. 8º, §2º: a evidência do consentimento precisa existir e ser recuperável."""
+    from dados.repositorio import RepositorioConsentimento
+    from lgpd import termo
+
+    repo = RepositorioConsentimento(banco)
+    consentimento_id = repo.registrar("Ana Ribeiro Salles", termo.VERSAO, termo.hash_termo())
+
+    usuarios = RepositorioUsuarios(banco)
+    uid = usuarios.criar(_matricula(), "Ana Ribeiro Salles", 2,
+                         senha.gerar_hash("Teste#2026abc", custo=4), "SP")
+    repo.vincular_usuario(consentimento_id, uid)
+
+    registros = repo.do_usuario(uid)
+    assert len(registros) == 1
+    assert registros[0]["hash_termo"] == termo.hash_termo()
+    assert registros[0]["versao_termo"] == termo.VERSAO
+    assert registros[0]["revogado_em"] is None
+    assert "APS PIVC" in registros[0]["finalidade"]      # finalidade específica, art. 9º
+
+
+def test_revogacao_marca_sem_apagar_a_evidencia(banco):
+    """Art. 8º, §5º: revogar é direito do titular — mas a baixa também é evidência.
+
+    Apagar a linha destruiria a prova de que houve consentimento no período em
+    que o dado foi tratado.
+    """
+    from dados.repositorio import RepositorioConsentimento
+    from lgpd import termo
+
+    repo = RepositorioConsentimento(banco)
+    uid = RepositorioUsuarios(banco).criar(_matricula(), "Caio Lima", 1,
+                                           senha.gerar_hash("Teste#2026abc", custo=4))
+    repo.registrar("Caio Lima", termo.VERSAO, termo.hash_termo(), usuario_id=uid)
+
+    assert repo.revogar(uid) == 1
+    registros = repo.do_usuario(uid)
+    assert len(registros) == 1                       # a linha continua lá
+    assert registros[0]["revogado_em"] is not None   # marcada, não removida
+    assert repo.revogar(uid) == 0                    # revogar de novo não duplica
+
+
+def test_conta_da_aplicacao_nao_apaga_consentimento(banco_demonstracao):
+    """A evidência do consentimento tem a mesma proteção da trilha: sem DELETE."""
+    with pytest.raises(mysql.connector.Error) as erro:
+        with banco_demonstracao.transacao() as cur:
+            cur.execute("DELETE FROM consentimento WHERE id = -1")
+    assert erro.value.errno == 1142        # DELETE command denied

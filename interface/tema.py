@@ -1,4 +1,5 @@
-"""Identidade visual da aplicação: paleta, fontes, estilos ttk e widgets de painel.
+"""Identidade visual da aplicação: paleta, fontes, estilos ttk, widgets de painel
+e o dimensionamento das janelas.
 
 Centralizado aqui pelo mesmo motivo que os parâmetros ficam no config.ini
 (princípio 10): nenhuma cor ou fonte solta no meio da lógica das telas.
@@ -6,9 +7,16 @@ Centralizado aqui pelo mesmo motivo que os parâmetros ficam no config.ini
 O tema base é o "clam", não o "vista" padrão do Windows. O vista delega o
 desenho ao tema nativo e IGNORA background/foreground na maioria dos widgets,
 o que tornaria qualquer paleta própria inócua. O clam aceita as opções de cor.
+
+As três funções do fim do arquivo — `ajustar_a_tela`, `altura_para_video` e
+`quebrar_com_a_janela` — existem porque medida fixa em pixels não sobrevive à
+escala de DPI: o que a janela ganha de altura sai pela base, levando junto os
+botões. Todas MEDEM em vez de estimar, e por isso `altura_para_video` só pode
+ser chamada depois que o restante da janela já foi empacotado.
 """
 from datetime import date, datetime
 from decimal import Decimal
+import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import ttk
 from typing import NamedTuple
@@ -97,6 +105,10 @@ def aplicar(raiz):
     estilo.map("Acento.TButton", background=[("active", ACENTO_ESCURO), ("disabled", BORDA)])
     estilo.configure("Perigo.TButton", background=ERRO, foreground="white", font=F_FORTE)
     estilo.map("Perigo.TButton", background=[("active", "#8c2824"), ("disabled", BORDA)])
+
+    # --- barra de progresso
+    estilo.configure("Medidor.Horizontal.TProgressbar", background=ACENTO,
+                     troughcolor=CABECALHO, borderwidth=0, thickness=8)
 
     # --- tabelas: o layout nu remove a moldura que o clam desenha por padrão.
     # A altura da linha vem da métrica da fonte, não de um número de pixels:
@@ -314,6 +326,94 @@ class Tabela(ttk.Frame):
         """Dicionário completo da linha selecionada, ou None."""
         selecao = self.arvore.selection()
         return self._linhas.get(selecao[0]) if selecao else None
+
+
+class CartaoNivel(ttk.Frame):
+    """Cartão de um nível de acesso: faixa colorida, o que exige e o que entrega.
+
+    Substituiu três botões iguais que só diziam o nome do nível. Mostrar os
+    fatores e o alcance de cada um na própria porta de entrada poupa a explicação
+    e deixa visível, de relance, que a exigência cresce junto com o que se vê.
+    """
+
+    def __init__(self, mestre, nivel, nome, fatores, alcance, exportacao, ao_entrar):
+        super().__init__(mestre, style="Cartao.TFrame")
+        cor = CORES_NIVEL[nivel]
+        faixa = tk.Frame(self, bg=cor, height=6)
+        faixa.pack(fill="x")
+
+        corpo = ttk.Frame(self, style="SuperficieLisa.TFrame", padding=(16, 14))
+        corpo.pack(fill="both", expand=True)
+
+        # o botão é ancorado na BASE antes do texto entrar: assim os três cartões
+        # alinham os botões entre si, por mais que as descrições tenham alturas
+        # diferentes
+        tk.Button(corpo, text=f"Entrar no nível {nivel}", bg=cor, fg="white",
+                  font=F_FORTE, relief="flat", pady=8, cursor="hand2",
+                  activebackground=cor, activeforeground="white",
+                  command=ao_entrar).pack(side="bottom", fill="x", pady=(14, 0))
+
+        ttk.Label(corpo, text=f"NÍVEL {nivel}", style="Rotulo.TLabel",
+                  foreground=cor).pack(anchor="w")
+        ttk.Label(corpo, text=nome, style="Superficie.TLabel",
+                  font=(FAMILIA, 13, "bold")).pack(anchor="w", pady=(2, 10))
+
+        for icone, texto in (("🔑", fatores), ("👁", alcance), ("⬇", exportacao)):
+            linha = ttk.Frame(corpo, style="SuperficieLisa.TFrame")
+            linha.pack(fill="x", pady=2, anchor="n")
+            ttk.Label(linha, text=icone, style="Superficie.TLabel",
+                      width=3).pack(side="left", anchor="n")
+            ttk.Label(linha, text=texto, style="Detalhe.TLabel", wraplength=210,
+                      justify="left").pack(side="left", anchor="w")
+
+
+def ajustar_a_tela(janela, largura, altura, margem_vertical=90):
+    """Centra a janela e a limita à área útil da tela.
+
+    Sem isto, uma janela que se dimensiona pelo conteúdo cresce além do monitor
+    quando há escala de DPI — e o que fica de fora é sempre a parte de baixo,
+    justamente onde ficam os botões de continuar. Devolve o tamanho concedido.
+    """
+    disponivel_l = janela.winfo_screenwidth() - 60
+    disponivel_a = janela.winfo_screenheight() - margem_vertical
+    larga = min(largura, disponivel_l)
+    alta = min(altura, disponivel_a)
+    x = max(0, (janela.winfo_screenwidth() - larga) // 2)
+    y = max(0, (janela.winfo_screenheight() - alta) // 2 - 20)
+    janela.geometry(f"{larga}x{alta}+{x}+{y}")
+    return larga, alta
+
+
+def altura_para_video(janela, altura_janela, minimo=240):
+    """Altura livre para o vídeo: o que sobra depois de TUDO que já foi empacotado.
+
+    O vídeo é o único elemento que pode encolher sem prejuízo — texto e botões
+    não. Então ele recebe a sobra, nunca o contrário. E a sobra é MEDIDA, não
+    estimada: reservar um número fixo de pixels erra em tela com escala de DPI,
+    onde os mesmos textos e botões ocupam bem mais altura. Por isso esta função
+    só funciona se for chamada depois de empacotar o restante da janela.
+    """
+    janela.update_idletasks()
+    ocupado = sum(filho.winfo_reqheight() for filho in janela.pack_slaves())
+    return max(minimo, altura_janela - ocupado)
+
+
+def quebrar_com_a_janela(rotulo, janela, margem=40):
+    """Faz o rótulo quebrar linha na largura ATUAL da janela, não numa medida fixa.
+
+    wraplength em pixels fixos erra para os dois lados: numa janela estreita o
+    texto vaza pelas bordas, e numa mensagem longa ele força a janela a crescer
+    além da tela — levando os botões junto. Religar a cada <Configure> custa
+    nada e mantém a mensagem inteira legível em qualquer largura.
+    """
+    def ajustar(evento):
+        if evento.widget is janela:
+            rotulo.configure(wraplength=max(240, evento.width - margem))
+
+    janela.bind("<Configure>", ajustar, add="+")
+    janela.after_idle(
+        lambda: rotulo.winfo_exists()
+        and rotulo.configure(wraplength=max(240, janela.winfo_width() - margem)))
 
 
 def cabecalho(mestre, titulo, subtitulo="", cor=ACENTO):

@@ -1,7 +1,10 @@
 """Consulta ao acervo após a autenticação — o conteúdo já chega tratado para o nível.
 
 Aba Acervo: itens que o nível pode ver, abertos com tarja + carimbo + marca d'água.
-Aba Indicadores: agregados da camada causal (N1) e pendências vencidas (RF-15).
+Aba Indicadores: agregados da camada causal (RF-20) e pendências vencidas (RF-15).
+
+A tela não decide nada sobre visibilidade: ela exibe o que o ServicoAcervo
+entrega. A supressão já aconteceu antes, sobre os pixels (RF-10).
 """
 import tkinter as tk
 from datetime import datetime
@@ -10,10 +13,48 @@ from tkinter import messagebox, ttk
 from acervo.entrega import POLITICA_EXPORTACAO
 from acervo.repositorio_acervo import RepositorioAcervo
 from acervo.tarja import AcessoNegado
-from interface.comum import CORES_NIVEL, NOMES_NIVEL, Visor, tabela_texto
+from interface import tema
+from interface.comum import CORES_NIVEL, NOMES_NIVEL, Visor
+from interface.tema import Coluna
 
 ROTULOS_EXPORTACAO = {"LIVRE": "livre", "COM_MARCA_DAGUA": "com marca d'água invisível",
-                      "BLOQUEADA": "bloqueada — só visualização"}
+                      "BLOQUEADA": "bloqueada — somente visualização"}
+
+COLUNAS_ITENS = [
+    Coluna("codigo", "Código", 8),
+    Coluna("titulo", "Título", 26, "w", elastica=True),
+    Coluna("tipo", "Tipo", 11),
+    Coluna("nivel_minimo", "Nível", 6, "center"),
+]
+
+COLUNAS_ATIVIDADE = [
+    Coluna("uf", "UF", 5, "center"),
+    Coluna("atividade", "Atividade", 8),
+    Coluna("descricao", "Descrição", 40, "w", elastica=True),
+    Coluna("pendencias", "Pendências", 11, "e"),
+]
+
+COLUNAS_MOTIVO = [
+    Coluna("motivo", "Motivo", 8),
+    Coluna("descricao", "Descrição", 40, "w", elastica=True),
+    Coluna("pendencias", "Pendências", 11, "e"),
+    Coluna("vencidas", "Vencidas", 9, "e"),
+]
+
+# O nível 1 recebe só a contagem por UF; a partir do 2, a lista detalhada (RF-15)
+COLUNAS_VENCIDAS_N1 = [
+    Coluna("uf", "UF", 6, "center"),
+    Coluna("vencidas", "Pendências vencidas", 20, "e"),
+]
+COLUNAS_VENCIDAS = [
+    Coluna("codigo", "Código", 10),
+    Coluna("substancia", "Substância", 30, "w", elastica=True),
+    Coluna("uf", "UF", 5, "center"),
+    Coluna("municipio", "Município", 22),
+    Coluna("prazo_coleta", "Prazo", 12),
+    Coluna("dias_atraso", "Atraso (dias)", 13, "e"),
+    Coluna("motivo", "Motivo", 8),
+]
 
 
 class JanelaConsulta(tk.Toplevel):
@@ -23,56 +64,76 @@ class JanelaConsulta(tk.Toplevel):
         self.repo = RepositorioAcervo(ctx.banco)
         self.atual = None
         self.title(f"Acervo — {sessao.nome} (nível {sessao.nivel})")
-        self.geometry("1280x780")
+        self.minsize(900, 600)
+        tema.ajustar_a_tela(self, 1340, 880)
+        self.configure(bg=tema.FUNDO)
 
-        cab = tk.Frame(self, bg=CORES_NIVEL[sessao.nivel])
-        cab.pack(fill="x")
-        dois = f" + {sessao.usuario2_id} (regra dos dois)" if sessao.usuario2_id else ""
-        tk.Label(cab, text=f"{sessao.nome}{dois} — Nível {sessao.nivel}: {NOMES_NIVEL[sessao.nivel]}",
-                 bg=CORES_NIVEL[sessao.nivel], fg="white", font=("Segoe UI", 12, "bold"),
-                 padx=12, pady=6).pack(side="left")
-        self.relogio = tk.Label(cab, bg=CORES_NIVEL[sessao.nivel], fg="white", padx=12)
-        self.relogio.pack(side="right")
-        tk.Label(self, text="Protótipo acadêmico — todo item marcado como DADO FICTÍCIO é sintético.",
-                 fg="#a8322d").pack(anchor="w", padx=12)
+        cor = CORES_NIVEL[sessao.nivel]
+        cabecalho = tk.Frame(self, bg=cor)
+        cabecalho.pack(fill="x")
+        dois = f"  +  usuário {sessao.usuario2_id} (regra dos dois)" if sessao.usuario2_id else ""
+        # tk.Label (clássico) só aceita pady inteiro; a tupla pertence ao pack
+        tk.Label(cabecalho, text=f"{sessao.nome}{dois}", bg=cor, fg="white", font=tema.F_TITULO,
+                 padx=16).pack(anchor="w", pady=(10, 0))
+        tk.Label(cabecalho, text=f"Nível {sessao.nivel} — {NOMES_NIVEL[sessao.nivel]}"
+                                 + (f"  ·  região {sessao.uf}" if sessao.uf else ""),
+                 bg=cor, fg="white", font=tema.F_SUBTITULO, padx=16).pack(anchor="w", pady=(0, 10))
+        self.relogio = tk.Label(cabecalho, bg=cor, fg="white", font=tema.F_FORTE, padx=16)
+        self.relogio.place(relx=1.0, rely=0.5, anchor="e")
+
+        ttk.Label(self, text="Protótipo acadêmico — todo item marcado como DADO FICTÍCIO é sintético.",
+                  style="Erro.TLabel").pack(anchor="w", padx=12, pady=(8, 0))
 
         abas = ttk.Notebook(self)
-        abas.pack(fill="both", expand=True, padx=8, pady=8)
+        abas.pack(fill="both", expand=True, padx=10, pady=10)
         abas.add(self._aba_acervo(abas), text="Acervo")
         abas.add(self._aba_indicadores(abas), text="Indicadores")
         self._tique()
 
     # ------------------------------------------------------------ acervo
     def _aba_acervo(self, abas):
-        quadro = ttk.Frame(abas)
-        esquerda = ttk.Frame(quadro, padding=6)
+        quadro = ttk.Frame(abas, padding=12)
+        esquerda = ttk.Frame(quadro)
         esquerda.pack(side="left", fill="y")
-        ttk.Label(esquerda, text="Itens disponíveis para o seu nível").pack(anchor="w")
-        self.lista = tk.Listbox(esquerda, width=40, height=20)
-        self.lista.pack(fill="y", expand=True)
-        self.lista.bind("<<ListboxSelect>>", self._abrir)
+        ttk.Label(esquerda, text="ITENS DISPONÍVEIS PARA O SEU NÍVEL",
+                  style="Secao.TLabel").pack(anchor="w", pady=(0, 5))
+
         self.itens = self.ctx.acervo.listar(self.sessao)
-        for item in self.itens:
-            self.lista.insert("end", f"{item['codigo']}  {item['titulo']}")
+        self.tabela_itens = tema.Tabela(esquerda, COLUNAS_ITENS, altura=8,
+                                        ao_selecionar=self._abrir)
+        self.tabela_itens.pack(fill="x")
+        self.tabela_itens.preencher(self.itens)
 
         politica = POLITICA_EXPORTACAO[self.sessao.nivel]
-        self.exportar = ttk.Button(esquerda, text="Exportar item aberto", command=self._exportar,
-                                   state="disabled" if politica == "BLOQUEADA" else "normal")
-        self.exportar.pack(fill="x", pady=(8, 0))
+        acoes = ttk.Frame(esquerda)
+        acoes.pack(fill="x", pady=(10, 0))
+        self.exportar = ttk.Button(acoes, text="Exportar item aberto", style="Acento.TButton",
+                                   state="disabled" if politica == "BLOQUEADA" else "normal",
+                                   command=self._exportar)
+        self.exportar.pack(side="left")
         ttk.Label(esquerda, text=f"Exportação: {ROTULOS_EXPORTACAO[politica]}",
-                  foreground="#555").pack(anchor="w")
-        self.ficha = tk.Text(esquerda, width=46, height=14, font=("Consolas", 9), wrap="word")
-        self.ficha.pack(fill="x", pady=(8, 0))
+                  style="Suave.TLabel").pack(anchor="w", pady=(4, 0))
 
-        self.visor = Visor(quadro, 880, 640)
-        self.visor.pack(side="left", padx=8)
+        ttk.Label(esquerda, text="FICHA CAUSAL", style="Secao.TLabel").pack(anchor="w", pady=(14, 5))
+        self.ficha = tk.Text(esquerda, width=56, height=16, font=tema.F_MONO, wrap="word",
+                             relief="solid", borderwidth=1, background=tema.SUPERFICIE,
+                             foreground=tema.TEXTO, padx=10, pady=8)
+        self.ficha.pack(fill="both", expand=True)
+        esquerda.pack_propagate(False)
+        esquerda.configure(width=540)
+
+        direita = ttk.Frame(quadro)
+        direita.pack(side="left", fill="both", expand=True, padx=(12, 0))
+        self.titulo_item = ttk.Label(direita, style="Forte.TLabel")
+        self.titulo_item.pack(anchor="w", pady=(0, 5))
+        self.visor = Visor(direita, 900, 660)
+        self.visor.pack()
         return quadro
 
-    def _abrir(self, _evento):
-        selecao = self.lista.curselection()
-        if not selecao:
+    def _abrir(self, item_selecionado):
+        if not item_selecionado:
             return
-        item_id = self.itens[selecao[0]]["id"]
+        item_id = item_selecionado["id"]
         try:
             item, imagem = self.ctx.acervo.abrir(self.sessao, item_id)
         except AcessoNegado as erro:
@@ -82,24 +143,32 @@ class JanelaConsulta(tk.Toplevel):
             return
         self.atual = (item_id, imagem)
         self.visor.mostrar(imagem)
+        self.titulo_item.configure(text=f"{item['codigo']} — {item['titulo']}")
         self._mostrar_ficha(item)
 
     def _mostrar_ficha(self, item):
         """A2-01: ficha causal e cadeia de responsabilidade — só a partir do N2 (RF-21)."""
         self.ficha.delete("1.0", "end")
         if not item.get("pendencia_id"):
+            self.ficha.insert("end", "Item sem pendência vinculada.")
             return
         ficha = self.repo.ficha_pendencia(item["pendencia_id"], self.sessao.nivel)
         if ficha is None:
-            self.ficha.insert("end", "Ficha causal disponível a partir do nível 2.")
+            self.ficha.insert("end", "Ficha causal disponível a partir do nível 2.\n\n"
+                                     "O nível 1 vê apenas dados agregados, sem localização "
+                                     "nem cadeia de responsabilidade (RF-20, RF-21).")
             return
-        linhas = [f"{ficha['codigo']} — {ficha['substancia']}",
-                  f"Atividade: {ficha['atividade']} {ficha['atividade_descricao']}",
-                  f"Motivo: {ficha['motivo']} {ficha['motivo_descricao']}",
-                  f"Base legal: {ficha['base_legal']}",
-                  f"Ação: {ficha['acao_institucional']}", "", "Cadeia de responsabilidade:"]
-        linhas += [f"  {r['vinculo']}: {r['nome']} ({r['situacao_cadastral']})"
-                   for r in self.repo.responsaveis(item["pendencia_id"], self.sessao.nivel)]
+        linhas = [f"{ficha['codigo']} — {ficha['substancia']}", "",
+                  f"Atividade geradora: {ficha['atividade']}",
+                  f"  {ficha['atividade_descricao']}", "",
+                  f"Motivo da permanência: {ficha['motivo']}",
+                  f"  {ficha['motivo_descricao']}", "",
+                  f"Base legal: {ficha['base_legal']}", "",
+                  f"Ação institucional: {ficha['acao_institucional']}", "",
+                  "Cadeia de responsabilidade:"]
+        responsaveis = self.repo.responsaveis(item["pendencia_id"], self.sessao.nivel)
+        linhas += [f"  · {r['vinculo']}: {r['nome']} ({r['situacao_cadastral']})"
+                   for r in responsaveis] or ["  (nenhum visível neste nível)"]
         self.ficha.insert("end", "\n".join(linhas))
 
     def _exportar(self):
@@ -111,20 +180,49 @@ class JanelaConsulta(tk.Toplevel):
         except AcessoNegado as erro:
             messagebox.showwarning("Exportação bloqueada", str(erro), parent=self)
             return
-        messagebox.showinfo("Exportado", f"Arquivo gravado em:\n{destino}", parent=self)
+        messagebox.showinfo("Exportado", f"Arquivo gravado em:\n{destino}\n\n"
+                                         "A marca d'água invisível registra quem exportou e quando.",
+                            parent=self)
 
     # ------------------------------------------------------------ indicadores
     def _aba_indicadores(self, abas):
-        quadro = ttk.Frame(abas, padding=6)
-        texto = tk.Text(quadro, font=("Consolas", 10))
-        texto.pack(fill="both", expand=True)
-        partes = ["DISTRIBUIÇÃO POR ATIVIDADE GERADORA (A1-02)", tabela_texto(self.repo.agregado_por_atividade()),
-                  "", "DISTRIBUIÇÃO POR MOTIVO DA PERMANÊNCIA", tabela_texto(self.repo.agregado_por_motivo()),
-                  "", "PENDÊNCIAS VENCIDAS (RF-15)",
-                  tabela_texto(self.repo.pendencias_vencidas(self.sessao.nivel, self.sessao.uf))]
-        texto.insert("end", "\n".join(partes))
-        texto.configure(state="disabled")
+        quadro = ttk.Frame(abas, padding=12)
+        quadro.columnconfigure(0, weight=1)
+        quadro.rowconfigure(1, weight=1)
+        quadro.rowconfigure(3, weight=1)
+
+        ttk.Label(quadro, text="DISTRIBUIÇÃO POR ATIVIDADE GERADORA E POR MOTIVO (A1-02)",
+                  style="Secao.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 5))
+        par = ttk.Frame(quadro)
+        par.grid(row=1, column=0, sticky="nsew")
+        par.columnconfigure(0, weight=1)
+        par.columnconfigure(1, weight=1)
+        par.rowconfigure(0, weight=1)
+        atividade = tema.Tabela(par, COLUNAS_ATIVIDADE, altura=9)
+        atividade.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
+        atividade.preencher(self._seguro(self.repo.agregado_por_atividade))
+        motivo = tema.Tabela(par, COLUNAS_MOTIVO, altura=9)
+        motivo.grid(row=0, column=1, sticky="nsew")
+        motivo.preencher(self._seguro(self.repo.agregado_por_motivo))
+
+        rotulo = ("PENDÊNCIAS VENCIDAS POR UF — CONTAGEM AGREGADA (RF-15)" if self.sessao.nivel == 1
+                  else f"PENDÊNCIAS VENCIDAS (RF-15)"
+                       + (f" — REGIÃO {self.sessao.uf}" if self.sessao.nivel == 2 else " — NACIONAL"))
+        ttk.Label(quadro, text=rotulo, style="Secao.TLabel").grid(row=2, column=0, sticky="w",
+                                                                  pady=(14, 5))
+        colunas = COLUNAS_VENCIDAS_N1 if self.sessao.nivel == 1 else COLUNAS_VENCIDAS
+        vencidas = tema.Tabela(quadro, colunas, altura=10)
+        vencidas.grid(row=3, column=0, sticky="nsew")
+        vencidas.preencher(self._seguro(
+            lambda: self.repo.pendencias_vencidas(self.sessao.nivel, self.sessao.uf)))
         return quadro
+
+    def _seguro(self, consulta):
+        """Indicador indisponível não derruba a consulta ao acervo."""
+        try:
+            return consulta()
+        except Exception:
+            return []
 
     # ------------------------------------------------------------ sessão N3
     def _tique(self):
@@ -133,8 +231,10 @@ class JanelaConsulta(tk.Toplevel):
         if self.sessao.expira_em:
             restante = (self.sessao.expira_em - datetime.now()).total_seconds()
             if restante <= 0:
-                messagebox.showinfo("Sessão encerrada", "Tempo máximo da sessão de nível 3 atingido.", parent=self)
+                messagebox.showinfo("Sessão encerrada",
+                                    "Tempo máximo da sessão de nível 3 atingido.", parent=self)
                 self.destroy()
                 return
-            self.relogio.configure(text=f"Sessão expira em {int(restante // 60):02d}:{int(restante % 60):02d}")
+            self.relogio.configure(text=f"Sessão expira em {int(restante // 60):02d}:"
+                                        f"{int(restante % 60):02d}")
         self.after(1000, self._tique)

@@ -80,3 +80,48 @@ def test_ordem_das_tabelas_respeita_as_chaves_estrangeiras():
     assert ordem.index("log_acesso") < ordem.index("usuario")
     assert ordem.index("amostra") < ordem.index("usuario")
     assert "item_acervo" not in ordem and "pendencia" not in ordem
+
+
+# ------------------------------------------------------------------ recriação do acervo
+def test_limpa_acervo_quando_a_trilha_nao_o_referencia(banco):
+    from acervo.repositorio_acervo import RepositorioAcervo
+    from dados.manutencao import acervo_em_uso, limpar_acervo
+    RepositorioAcervo(banco).importar_metadados(configuracao.caminho("acervo_metadados"))
+
+    with banco.transacao() as cur:
+        assert acervo_em_uso(cur) == 0
+        removidos = limpar_acervo(cur)
+        restantes = contar(cur, ("item_acervo", "pendencia", "regiao_sensivel", "responsavel"))
+    assert removidos["item_acervo"] == 9 and removidos["pendencia"] == 20
+    assert all(n == 0 for n in restantes.values())
+
+    # e a importação volta a funcionar do zero
+    pend, itens = RepositorioAcervo(banco).importar_metadados(
+        configuracao.caminho("acervo_metadados"))
+    assert (pend, itens) == (20, 9)
+
+
+def test_acervo_em_uso_detecta_referencia_da_trilha(banco):
+    """Com uma consulta registrada sobre um item, recriar o acervo exigiria
+    apagar o registro — a ferramenta precisa enxergar isso e recusar."""
+    from acervo.repositorio_acervo import RepositorioAcervo
+    from dados.manutencao import acervo_em_uso
+    RepositorioAcervo(banco).importar_metadados(configuracao.caminho("acervo_metadados"))
+    item = banco.consultar("SELECT id FROM item_acervo LIMIT 1")[0]["id"]
+    TrilhaAuditoria(banco).registrar(
+        novo_registro("CONSULTA", 1, "CONCEDIDO", "CONCEDIDO", item_id=item))
+
+    with banco.transacao() as cur:
+        assert acervo_em_uso(cur) == 1
+
+
+def test_taxonomia_da_camada_causal_nao_sai_com_o_acervo(banco):
+    """atividade_geradora e motivo_permanencia vêm do sql/02, não do JSON:
+    apagá-las deixaria a importação seguinte sem a que referenciar."""
+    from dados.manutencao import TABELAS_DE_ACERVO
+    assert "atividade_geradora" not in TABELAS_DE_ACERVO
+    assert "motivo_permanencia" not in TABELAS_DE_ACERVO
+    with banco.transacao() as cur:
+        limpar_operacao(cur)
+        assert contar(cur, ("atividade_geradora", "motivo_permanencia")) == \
+            {"atividade_geradora": 8, "motivo_permanencia": 8}

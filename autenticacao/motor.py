@@ -67,6 +67,11 @@ class TentativaFacial:
         self.ultima_qualidade = None
         motor.pipeline.segmentador.reiniciar()
 
+    @property
+    def segundos_restantes(self):
+        """Tempo que resta na etapa facial, para a tela poder mostrar a contagem."""
+        return max(0.0, self.prazo - time.monotonic())
+
     def alimentar(self, frame):
         self.ultimo_frame = frame
         alegado = self.usuario["id"] if self.usuario else None
@@ -129,9 +134,14 @@ class MotorAutenticacao:
         try:
             ev.bloqueado = self.bloqueios.esta_bloqueado(matricula)
             usuario = None if ev.bloqueado else self.usuarios.por_matricula(matricula)
+            if not ev.bloqueado:
+                # a verificação roda mesmo sem usuário: senha.verificar() compara
+                # contra um hash fictício para que o TEMPO de resposta não revele
+                # se a matrícula existe (medido: 26 ms contra 243 ms antes disso)
+                ev.senha_ok = senha.verificar(senha_digitada,
+                                              usuario["senha_hash"] if usuario else None)
             if usuario:
                 ev.usuario_id = usuario["id"]
-                ev.senha_ok = senha.verificar(senha_digitada, usuario["senha_hash"])
                 if nivel == 3:
                     minimo = self.cfg.getint("autenticacao", "senha_forte_min_caracteres")
                     ev.senha_forte = not senha.avaliar_senha_forte(senha_digitada, minimo)

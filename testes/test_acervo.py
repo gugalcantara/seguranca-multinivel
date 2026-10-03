@@ -128,3 +128,73 @@ def test_inspecao_detecta_lacre_rompido():
     assert r.alterado and len(r.regioes) >= 1
     x, y, w, h = r.regioes[0]
     assert 440 < x + w / 2 < 520 and 170 < y + h / 2 < 230      # lacre do tambor do meio
+
+
+# ------------------------------------------------------------------ RF-20: sem localização no N1
+def _mapa_e_regioes():
+    """Carrega o A1-05 real do acervo e as regiões declaradas no metadados.json."""
+    import json
+    from pathlib import Path
+    import configuracao
+    dados = json.loads(configuracao.caminho("acervo_metadados").read_text(encoding="utf-8"))
+    item = next(i for i in dados["itens"] if i["codigo"] == "A1-05")
+    imagem = cv2.imread(str(configuracao.caminho("acervo") / item["arquivo"]))
+    regioes = [Regiao(r["x"], r["y"], r["largura"], r["altura"], r["nivel_minimo"], r.get("rotulo"))
+               for r in item["regioes"]]
+    return imagem, regioes
+
+
+def test_nivel_1_nao_enxerga_a_distribuicao_geografica_do_mapa():
+    """RF-20: suprimir só os rótulos deixaria a localização visível na FORMA do gráfico.
+
+    Os pontos plotados revelam a posição aproximada mesmo sem as coordenadas
+    escritas ao lado — por isso a área de plotagem inteira é sensível.
+    """
+    mapa, regioes = _mapa_e_regioes()
+    assert mapa is not None, "acervo não gerado: rode python -m ferramentas gerar-acervo"
+    assert any(r.rotulo == "DISTRIBUICAO_GEOGRAFICA" for r in regioes)
+
+    area = next(r for r in regioes if r.rotulo == "DISTRIBUICAO_GEOGRAFICA")
+    custodia = next(r for r in regioes if r.rotulo == "CUSTODIA")
+    n1 = aplicar_tarja(mapa, regioes, 1)
+    n2 = aplicar_tarja(mapa, regioes, 2)
+    # faixa dentro da área de plotagem e ACIMA da custódia, que é nível 3 e
+    # continua suprimida no nível 2 — comparar a área inteira misturaria as duas regras
+    faixa = (slice(area.y, custodia.y - 10), slice(area.x, area.x + area.largura))
+
+    assert _variancia(n1, area) < _variancia(mapa, area) / 5   # N1: vira borrão
+    assert np.array_equal(n2[faixa], mapa[faixa])              # N2: chega intacta
+    assert _variancia(n2, custodia) < _variancia(mapa, custodia) / 5   # ...menos a custódia
+
+
+def test_titulo_do_mapa_continua_legivel_no_nivel_1():
+    """Suprimir a área não pode esconder o que o item É: o N1 precisa saber que
+    existe um mapa de densidade ao qual ele não tem acesso."""
+    mapa, regioes = _mapa_e_regioes()
+    n1 = aplicar_tarja(mapa, regioes, 1)
+    faixa_do_titulo = (slice(30, 90), slice(0, mapa.shape[1]))
+    assert np.array_equal(n1[faixa_do_titulo], mapa[faixa_do_titulo])
+
+
+def test_supressao_de_posicao_nao_deixa_residuo_localizavel():
+    """O borrão gaussiano preserva o CENTROIDE: medindo o resíduo de cor do mapa
+    borrado, o pico caía exatamente sobre um ponto original (0 px de distância).
+
+    Para texto o gaussiano basta — o conteúdo fica ilegível. Para posição não:
+    a informação está na forma, não nos caracteres. Daí a supressão total para
+    rótulos de área, e este teste exige que a região fique sem estrutura alguma.
+    """
+    mapa, regioes = _mapa_e_regioes()
+    area = next(r for r in regioes if r.rotulo == "DISTRIBUICAO_GEOGRAFICA")
+    n1 = aplicar_tarja(mapa, regioes, 1)
+    recorte = n1[area.y:area.y + area.altura, area.x:area.x + area.largura]
+    assert float(recorte.var()) == 0.0, "sobrou estrutura na área suprimida"
+
+
+def test_texto_continua_com_supressao_borrada():
+    """A supressão total é só para os rótulos de posição; o texto segue borrado,
+    que preserva a diagramação da página e já o torna ilegível."""
+    doc = _documento()
+    suprimido = aplicar_tarja(doc, REGIOES, 1)
+    assert _variancia(suprimido, REGIOES[0]) < _variancia(doc, REGIOES[0]) / 5
+    assert float(suprimido[40:66, 30:430].var()) > 0.0      # não virou bloco sólido

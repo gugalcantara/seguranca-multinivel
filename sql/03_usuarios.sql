@@ -12,6 +12,9 @@ CREATE USER IF NOT EXISTS 'aps_app'@'%'         IDENTIFIED BY 'troque-esta-senha
 GRANT SELECT                  ON aps_pivc.nivel              TO 'aps_app'@'localhost', 'aps_app'@'%';
 GRANT SELECT, INSERT, UPDATE  ON aps_pivc.usuario            TO 'aps_app'@'localhost', 'aps_app'@'%';
 GRANT SELECT, INSERT          ON aps_pivc.amostra            TO 'aps_app'@'localhost', 'aps_app'@'%';
+-- UPDATE permitido para vincular o usuário criado e para marcar a revogação;
+-- sem DELETE: a evidência do consentimento não se apaga (LGPD art. 8º, §2º).
+GRANT SELECT, INSERT, UPDATE  ON aps_pivc.consentimento      TO 'aps_app'@'localhost', 'aps_app'@'%';
 GRANT SELECT, INSERT, UPDATE, DELETE ON aps_pivc.bloqueio    TO 'aps_app'@'localhost', 'aps_app'@'%';
 GRANT SELECT                  ON aps_pivc.atividade_geradora TO 'aps_app'@'localhost', 'aps_app'@'%';
 GRANT SELECT                  ON aps_pivc.motivo_permanencia TO 'aps_app'@'localhost', 'aps_app'@'%';

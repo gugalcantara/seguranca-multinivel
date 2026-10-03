@@ -79,7 +79,12 @@ class ResultadoVerificacao:
 
 
 def verificar_cadeia(registros):
-    """Função pura: recebe os registros em ordem de id e localiza a 1ª ruptura."""
+    """Função pura: recebe os registros em ordem de id e localiza a 1ª ruptura.
+
+    Percorre a cadeia INTEIRA, recomputando cada hash — custo linear (~8 ms por
+    mil registros). Verificar só um trecho recente seria mais barato e não
+    provaria nada: é justamente o elo com todo o passado que dá valor à cadeia.
+    """
     anterior = GENESIS
     for i, reg in enumerate(registros):
         if reg["hash_anterior"] != anterior:

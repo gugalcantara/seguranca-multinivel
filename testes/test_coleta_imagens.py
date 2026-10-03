@@ -139,3 +139,26 @@ def test_coletor_aceita_limites_proprios_para_imagens():
     assert (padrao.alvo, padrao.minimo) == (40, 30)
     por_imagem = ColetorAmostras(1, alvo=6, minimo=1)
     assert (por_imagem.alvo, por_imagem.minimo) == (6, 1)
+
+
+# ------------------------------------------------------------------ diagnóstico ao usuário
+def test_resumo_de_descartes_concorda_em_numero():
+    """A tela diz o que corrigir; "1 escuras" denunciaria texto montado por concatenação."""
+    from interface.cadastro import _resumir
+    assert _resumir({"ESCURO": 1}) == "1 escura"
+    assert _resumir({"ESCURO": 4}) == "4 escuras"
+    assert _resumir({"DESFOCADO": 1}) == "1 desfocada"
+    assert _resumir({"SEM_CONTRASTE": 3}) == "3 sem contraste"      # forma invariável
+
+
+def test_resumo_ordena_pelo_motivo_mais_frequente_e_limita():
+    from interface.cadastro import _resumir
+    assert _resumir({"DESFOCADO": 3, "ESCURO": 1, "DUPLICATA": 7}) == \
+        "7 repetidas, 3 desfocadas, 1 escura"
+    muitos = {"DUPLICATA": 9, "ESCURO": 7, "DESFOCADO": 5, "RUIDOSO": 3}
+    assert _resumir(muitos, limite=2) == "9 repetidas, 7 escuras"
+
+
+def test_motivo_desconhecido_nao_quebra_a_tela():
+    from interface.cadastro import _resumir
+    assert _resumir({"MOTIVO_NOVO": 2}) == "2 motivo_novo"

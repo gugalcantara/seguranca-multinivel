@@ -620,6 +620,14 @@
       "pendencia": null,
       "regioes": [
         {
+          "x": 40,
+          "y": 110,
+          "largura": 820,
+          "altura": 490,
+          "rotulo": "DISTRIBUICAO_GEOGRAFICA",
+          "nivel_minimo": 2
+        },
+        {
           "x": 584,
           "y": 330,
           "largura": 134,

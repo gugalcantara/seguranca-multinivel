@@ -117,3 +117,43 @@ def test_confirmador_exige_frames_coerentes_seguidos():
         assert c.alimentar(2, 50) is None
     rotulo, media = c.alimentar(2, 50)
     assert rotulo == 2 and media == 50
+
+
+# ------------------------------------------------------------------ o que a mensagem revela
+def test_falha_de_identidade_responde_sempre_o_mesmo():
+    """Regressão de vazamento: a tela não pode confirmar que a senha estava certa.
+
+    Antes, CREDENCIAL_ALHEIA dizia "não confere com a matrícula informada" — quem
+    tivesse a senha e não o rosto sabia que acertara metade. O motivo distinto
+    continua existindo, mas só na trilha, onde serve à auditoria.
+    """
+    from autenticacao.politica import MENSAGENS
+    assert MENSAGENS[Motivo.CREDENCIAL_ALHEIA] == MENSAGENS[Motivo.FACE_NAO_RECONHECIDA]
+    texto = MENSAGENS[Motivo.CREDENCIAL_ALHEIA].lower()
+    for revelador in ("senha", "matrícula", "confere", "correta"):
+        assert revelador not in texto, f"a mensagem deixa deduzir: {revelador}"
+
+    # a distinção segue viva para a auditoria
+    alheia = decidir(ev_n2(distancia=90.0), LIMIARES, JANELA)
+    desconhecida = decidir(ev_n1(distancia=90.0), LIMIARES, JANELA)
+    assert alheia.motivo == Motivo.CREDENCIAL_ALHEIA
+    assert desconhecida.motivo == Motivo.FACE_NAO_RECONHECIDA
+    assert alheia.mensagem == desconhecida.mensagem        # ...mas a tela não distingue
+
+
+def test_matricula_inexistente_e_senha_errada_sao_indistinguiveis():
+    """Enumerar usuários pela mensagem seria tão eficaz quanto pelo tempo."""
+    from autenticacao.politica import MENSAGENS
+    assert MENSAGENS[Motivo.USUARIO_INEXISTENTE] == MENSAGENS[Motivo.SENHA_INCORRETA]
+
+
+def test_toda_mensagem_de_negacao_diz_o_que_fazer():
+    """Mensagem que só nega deixa a pessoa sem saída — e gera chamado ao suporte."""
+    from autenticacao.politica import MENSAGENS
+    sem_acao = {Motivo.CONCEDIDO, Motivo.NIVEL_INVALIDO}
+    verbos = ("confira", "aguarde", "procure", "tente", "use", "refaça", "recomece",
+              "posicione", "melhore", "precisa", "solicite", "exige")
+    for motivo, mensagem in MENSAGENS.items():
+        if motivo in sem_acao:
+            continue
+        assert any(v in mensagem.lower() for v in verbos), f"{motivo.value} não orienta: {mensagem}"

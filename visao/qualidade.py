@@ -61,10 +61,20 @@ class PortaoQualidade:
         self.ruido_maximo = cfg.getfloat(q, "ruido_maximo")
 
     def avaliar(self, face_cinza, n_faces=1):
+        """Cada recusa vem com a AÇÃO que resolve, não só com o diagnóstico.
+
+        "Imagem escura" informa; "acenda uma luz à sua frente" resolve. Quem
+        está diante da câmera não sabe o que é variância de Laplaciano — sabe
+        acender a luz, limpar a lente e parar de se mexer.
+        """
         if n_faces == 0:
-            return ResultadoQualidade(False, "SEM_FACE", "Posicione o rosto no centro da câmera.")
+            return ResultadoQualidade(False, "SEM_FACE",
+                                      "Nenhum rosto encontrado. Centralize-se na moldura e "
+                                      "olhe para a câmera.")
         if n_faces > 1:
-            return ResultadoQualidade(False, "MULTIPLAS_FACES", "Apenas uma pessoa por vez diante da câmera.")
+            return ResultadoQualidade(False, "MULTIPLAS_FACES",
+                                      "Há mais de um rosto na imagem. Peça para as outras pessoas "
+                                      "saírem do enquadramento — é uma por vez.")
 
         n = nitidez(face_cinza)
         b, c = brilho_contraste(face_cinza)
@@ -73,13 +83,24 @@ class PortaoQualidade:
         medidas = dict(nitidez=n, brilho=b, contraste=c, ruido=r, escore=escore)
 
         if b < self.brilho_minimo:
-            return ResultadoQualidade(False, "ESCURO", "Imagem escura — aproxime-se da luz.", **medidas)
+            return ResultadoQualidade(False, "ESCURO",
+                                      "Ambiente escuro demais. Acenda uma luz à sua frente ou "
+                                      "vire-se para a janela.", **medidas)
         if b > self.brilho_maximo:
-            return ResultadoQualidade(False, "CLARO", "Imagem estourada — evite luz direta na câmera.", **medidas)
+            return ResultadoQualidade(False, "CLARO",
+                                      "Luz forte demais no rosto. Afaste-se da luz direta ou "
+                                      "feche um pouco a cortina.", **medidas)
         if c < self.contraste_minimo:
-            return ResultadoQualidade(False, "SEM_CONTRASTE", "Pouco contraste — evite contra-luz.", **medidas)
+            return ResultadoQualidade(False, "SEM_CONTRASTE",
+                                      "Você está contra a luz. Fique de frente para a fonte de "
+                                      "luz, não de costas.", **medidas)
         if n < self.nitidez_minima:
-            return ResultadoQualidade(False, "DESFOCADO", "Imagem desfocada — fique parado por um instante.", **medidas)
+            return ResultadoQualidade(False, "DESFOCADO",
+                                      "Imagem fora de foco. Fique parado um instante e confira "
+                                      "se a lente está limpa.", **medidas)
         if r > self.ruido_maximo:
-            return ResultadoQualidade(False, "RUIDOSO", "Imagem com muito ruído — melhore a iluminação.", **medidas)
-        return ResultadoQualidade(True, "OK", "Qualidade adequada.", **medidas)
+            return ResultadoQualidade(False, "RUIDOSO",
+                                      "Muito ruído na imagem — sinal de pouca luz. Ilumine melhor "
+                                      "o ambiente.", **medidas)
+        return ResultadoQualidade(True, "OK", "Boa — continue assim, movendo a cabeça devagar.",
+                                  **medidas)

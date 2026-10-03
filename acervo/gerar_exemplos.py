@@ -58,6 +58,16 @@ class Tela:
         self.texto(40, y, nome, 17, (90, 90, 90))
         self.texto(260, y, valor, 18, sensivel=sensivel, rotulo=rotulo)
 
+    def area_sensivel(self, x, y, largura, altura, nivel, rotulo):
+        """Marca uma ÁREA como sensível, sem texto associado.
+
+        Necessário para o desenho: num mapa, a própria posição dos pontos revela
+        a localização, mesmo com os rótulos suprimidos. Suprimir só o texto
+        deixaria a informação à vista na forma do gráfico.
+        """
+        self.regioes.append({"x": x, "y": y, "largura": largura, "altura": altura,
+                             "rotulo": rotulo, "nivel_minimo": nivel})
+
     def salvar(self, caminho):
         img = self.img
         for (x, y, t, cor, tam, neg) in self.textos:
@@ -154,7 +164,12 @@ def gerar(destino=None, semente=2026):
     registrar(t, "A1-02", "Distribuição por Atividade", "DOCUMENTO", 1)
 
     # Item-vitrine do CA-03: mesmo mapa, supressão distinta nos três níveis
-    t = Tela("A1-05 Mapa de Densidade", "Coordenadas: nível 2 · Instalação de custódia: nível 3")
+    t = Tela("A1-05 Mapa de Densidade",
+             "Distribuição geográfica: nível 2 · Instalação de custódia: nível 3")
+    # A ÁREA de plotagem inteira é sensível, não apenas os rótulos de coordenada:
+    # a posição de cada ponto no mapa já revela a localização aproximada, e o
+    # nível 1 deve ver "agregados, SEM localização" (RF-20).
+    t.area_sensivel(40, 110, 820, 490, nivel=2, rotulo="DISTRIBUICAO_GEOGRAFICA")
     cv2.rectangle(t.img, (40, 110), (860, 600), (225, 235, 225), -1)
     for gx in range(40, 861, 82):
         cv2.line(t.img, (gx, 110), (gx, 600), (200, 210, 200), 1)

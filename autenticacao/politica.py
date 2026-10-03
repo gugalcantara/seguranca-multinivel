@@ -51,23 +51,40 @@ class Motivo(str, Enum):
     ERRO_INTERNO = "ERRO_INTERNO"
 
 
+# Uma falha de identidade responde SEMPRE o mesmo, venha ela de face
+# desconhecida ou de rosto que não casa com a matrícula. Dizer "não confere com
+# a matrícula" confirmaria ao atacante que a SENHA estava certa — ele saberia
+# que só falta o rosto. A distinção existe, mas apenas no motivo gravado na
+# trilha, onde serve à auditoria e não a quem tenta entrar.
+_IDENTIDADE_NAO_CONFIRMADA = ("Não foi possível confirmar a sua identidade. "
+                              "Posicione o rosto no centro, com boa luz, e tente de novo.")
+
 MENSAGENS = {
     Motivo.CONCEDIDO: "Acesso concedido.",
     Motivo.NIVEL_INVALIDO: "Nível de acesso inválido.",
-    Motivo.USUARIO_INEXISTENTE: "Matrícula ou senha incorretas.",
-    Motivo.USUARIO_INATIVO: "Usuário inativo.",
-    Motivo.BLOQUEADO: "Matrícula temporariamente bloqueada por tentativas sucessivas.",
-    Motivo.SENHA_INCORRETA: "Matrícula ou senha incorretas.",
-    Motivo.SENHA_FRACA: "O nível 3 exige senha forte.",
-    Motivo.QUALIDADE_INSUFICIENTE: "Não foi possível obter imagem de qualidade.",
-    Motivo.FACE_NAO_RECONHECIDA: "Identidade não reconhecida.",
-    Motivo.CREDENCIAL_ALHEIA: "Identidade não confere com a matrícula informada.",
-    Motivo.NIVEL_INSUFICIENTE: "Seu nível de permissão não permite este acesso.",
-    Motivo.VIVACIDADE_NAO_CONFIRMADA: "Desafio de vivacidade não confirmado.",
-    Motivo.SEGUNDA_PESSOA_AUSENTE: "O nível 3 exige uma segunda pessoa autorizada.",
-    Motivo.SEGUNDA_PESSOA_INVALIDA: "A segunda pessoa deve ser outra identidade com nível 3.",
-    Motivo.JANELA_EXPIRADA: "A janela da regra dos dois expirou.",
-    Motivo.ERRO_INTERNO: "Falha interna — acesso negado por segurança.",
+    Motivo.USUARIO_INEXISTENTE: "Matrícula ou senha incorretas. Confira os dois campos.",
+    Motivo.USUARIO_INATIVO: ("Este cadastro está inativo. Procure o administrador para reativá-lo."),
+    Motivo.BLOQUEADO: ("Matrícula bloqueada por tentativas seguidas. Aguarde alguns minutos "
+                       "ou procure o administrador."),
+    Motivo.SENHA_INCORRETA: "Matrícula ou senha incorretas. Confira os dois campos.",
+    Motivo.SENHA_FRACA: ("O nível 3 exige senha forte: ao menos 12 caracteres, com maiúscula, "
+                         "minúscula, número e símbolo."),
+    Motivo.QUALIDADE_INSUFICIENTE: ("Não foi possível obter uma imagem nítida o bastante. "
+                                    "Melhore a iluminação e fique parado por um instante."),
+    Motivo.FACE_NAO_RECONHECIDA: _IDENTIDADE_NAO_CONFIRMADA,
+    Motivo.CREDENCIAL_ALHEIA: _IDENTIDADE_NAO_CONFIRMADA,
+    Motivo.NIVEL_INSUFICIENTE: ("Seu nível de permissão não alcança este conteúdo. "
+                                "Use um nível compatível ou solicite elevação ao administrador."),
+    Motivo.VIVACIDADE_NAO_CONFIRMADA: ("Desafio não confirmado. Refaça o gesto pedido olhando "
+                                       "para a câmera, sem sair do enquadramento."),
+    Motivo.SEGUNDA_PESSOA_AUSENTE: ("O nível 3 exige uma segunda pessoa autorizada, que precisa "
+                                    "se autenticar logo em seguida."),
+    Motivo.SEGUNDA_PESSOA_INVALIDA: ("A segunda pessoa precisa ser outra identidade, também "
+                                     "de nível 3."),
+    Motivo.JANELA_EXPIRADA: ("O tempo para a segunda pessoa se autenticar terminou. "
+                             "Recomece a autenticação."),
+    Motivo.ERRO_INTERNO: ("Falha interna — acesso negado por segurança. "
+                          "Procure o administrador e informe o horário da tentativa."),
 }
 
 
@@ -187,6 +204,12 @@ class ConfirmadorFrames:
         if self._rotulo is not None and len(self._distancias) >= self.n:
             return self._rotulo, sum(self._distancias) / len(self._distancias)
         return None
+
+    @property
+    def confirmados(self):
+        """Quantos frames coerentes seguidos já entraram — a tela usa para
+        mostrar o progresso em vez de um 'aguarde' indefinido."""
+        return len(self._distancias)
 
     def reiniciar(self):
         self._rotulo = None

@@ -3,7 +3,7 @@
     python -m ferramentas gerar-chave        # chave Fernet para CHAVE_CIFRAGEM no .env
     python -m ferramentas hash-admin         # hash bcrypt para ADMIN_SENHA_HASH no .env
     python -m ferramentas gerar-acervo       # 9 itens sintéticos + metadados.json
-    python -m ferramentas importar-acervo    # metadados.json -> MySQL
+    python -m ferramentas importar-acervo    # metadados.json -> MySQL (--recriar troca o acervo)
     python -m ferramentas verificar-trilha   # S-04: integridade da cadeia de hash
     python -m ferramentas extrair-marca ARQ  # S-07: quem exportou este arquivo?
     python -m ferramentas inspecionar REF ATUAL [--saida mapa.png]   # M-03
@@ -44,10 +44,48 @@ def _banco():
     return Banco()
 
 
-def importar_acervo(_):
+def importar_acervo(args):
+    """Importa metadados.json. Com --recriar, apaga o acervo atual antes.
+
+    A recriação é necessária quando o acervo muda (regiões sensíveis novas, ou a
+    troca dos itens sintéticos pelos reais): item_acervo.codigo é UNIQUE, então
+    importar por cima falharia.
+    """
     from acervo.repositorio_acervo import RepositorioAcervo
-    n_pend, n_itens = RepositorioAcervo(_banco()).importar_metadados(configuracao.caminho("acervo_metadados"))
+
+    if getattr(args, "recriar", False):
+        _recriar_acervo(args)
+    n_pend, n_itens = RepositorioAcervo(_banco()).importar_metadados(
+        configuracao.caminho("acervo_metadados"))
     print(f"Importados: {n_pend} pendências, {n_itens} itens")
+
+
+def _recriar_acervo(args):
+    import mysql.connector
+
+    from dados.manutencao import acervo_em_uso, limpar_acervo
+
+    credenciais = configuracao.credenciais_banco()
+    credenciais["user"] = args.usuario
+    credenciais["password"] = args.senha if args.senha is not None else \
+        getpass.getpass(f"Senha de {args.usuario}@MySQL: ")
+    conexao = mysql.connector.connect(**credenciais)
+    try:
+        cursor = conexao.cursor()
+        em_uso = acervo_em_uso(cursor)
+        if em_uso:
+            sys.exit(
+                f"[FALHA] A trilha tem {em_uso} registro(s) de consulta ou exportação apontando\n"
+                f"        para itens do acervo. Apagar os itens exigiria apagar esses registros —\n"
+                f"        ou seja, reescrever o passado para trocar o conteúdo.\n\n"
+                f"        Para seguir, zere a operação primeiro (o acervo é reimportável):\n"
+                f"            python -m ferramentas limpar-operacao --confirmar")
+        removidos = limpar_acervo(cursor)
+        conexao.commit()
+        print("Acervo anterior removido: "
+              + ", ".join(f"{n} {tabela}" for tabela, n in removidos.items() if n))
+    finally:
+        conexao.close()
 
 
 def verificar_trilha(_):
@@ -133,9 +171,16 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="comando", required=True)
     for nome, funcao in (("gerar-chave", gerar_chave), ("hash-admin", hash_admin),
-                         ("gerar-acervo", gerar_acervo), ("importar-acervo", importar_acervo),
+                         ("gerar-acervo", gerar_acervo),
                          ("verificar-trilha", verificar_trilha), ("expurgar-fotos", expurgar_fotos)):
         sub.add_parser(nome).set_defaults(funcao=funcao)
+
+    p = sub.add_parser("importar-acervo", help="carrega metadados.json no MySQL")
+    p.add_argument("--recriar", action="store_true",
+                   help="apaga o acervo atual antes de importar (exige conta administrativa)")
+    p.add_argument("--usuario", default="root", help="conta administrativa, para --recriar")
+    p.add_argument("--senha", default=None, help="senha; se omitida, é pedida sem eco")
+    p.set_defaults(funcao=importar_acervo)
     p = sub.add_parser("extrair-marca")
     p.add_argument("arquivo")
     p.set_defaults(funcao=extrair_marca)

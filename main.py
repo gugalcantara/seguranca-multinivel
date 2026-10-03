@@ -17,10 +17,9 @@ from acervo.repositorio_acervo import RepositorioAcervo
 from autenticacao.motor import MotorAutenticacao
 from dados.auditoria import TrilhaAuditoria
 from dados.conexao import Banco, BancoIndisponivel
-from dados.repositorio import RepositorioUsuarios
+from dados.repositorio import RepositorioConsentimento, RepositorioUsuarios
 from interface import tema
 from interface.autenticacao import JanelaAutenticacao
-from interface.cadastro import abrir_administracao
 from interface.comum import CORES_NIVEL, NOMES_NIVEL, Contexto
 from interface.painel import abrir_painel
 from interface.relatorios import JanelaConsulta
@@ -48,30 +47,55 @@ def _montar_contexto():
         motor=MotorAutenticacao(banco, reconhecedor, trilha, cfg),
         acervo=ServicoAcervo(RepositorioAcervo(banco), trilha, cfg),
         usuarios=RepositorioUsuarios(banco),
+        consentimentos=RepositorioConsentimento(banco),
     )
+
+
+# O que cada nível exige e entrega — na porta de entrada, não só na documentação.
+NIVEIS = {
+    1: ("face apenas, sem senha",
+        "números e mapas agregados, sem localização",
+        "exportação livre"),
+    2: ("matrícula e senha, depois a face",
+        "registros completos da sua região, com endereço e responsável",
+        "exportação com marca d'água invisível"),
+    3: ("senha forte, face, desafio na câmera e uma segunda pessoa",
+        "visão nacional consolidada, incluindo pontos de custódia",
+        "exportação bloqueada — somente visualização"),
+}
 
 
 class TelaInicial(ttk.Frame):
     def __init__(self, raiz, ctx):
-        super().__init__(raiz, padding=28)
+        super().__init__(raiz, padding=26)
         self.ctx = ctx
         self.pack(fill="both", expand=True)
         ttk.Label(self, text="Cadastro Consolidado de Passivos Perigosos Pendentes",
                   style="Titulo.TLabel").pack()
         ttk.Label(self, text="Controle de acesso multinível por reconhecimento facial "
-                             "— protótipo APS PIVC 2026/2", style="Subtitulo.TLabel").pack(pady=(0, 20))
-        for nivel in (1, 2, 3):
-            tk.Button(self, text=f"Entrar no nível {nivel} — {NOMES_NIVEL[nivel]}", width=46,
-                      bg=CORES_NIVEL[nivel], fg="white", font=tema.F_FORTE, relief="flat",
-                      pady=10, cursor="hand2", activebackground=CORES_NIVEL[nivel],
-                      activeforeground="white", command=lambda n=nivel: self._autenticar(n)).pack(pady=4)
+                             "— protótipo acadêmico, APS PIVC 2026/2",
+                  style="Subtitulo.TLabel").pack(pady=(2, 20))
+
+        cartoes = ttk.Frame(self)
+        cartoes.pack(fill="both", expand=True)
+        for coluna, nivel in enumerate((1, 2, 3)):
+            fatores, alcance, exportacao = NIVEIS[nivel]
+            cartao = tema.CartaoNivel(cartoes, nivel, NOMES_NIVEL[nivel], fatores, alcance,
+                                      exportacao, lambda n=nivel: self._autenticar(n))
+            cartao.grid(row=0, column=coluna, sticky="nsew", padx=(0 if not coluna else 10, 0))
+            cartoes.columnconfigure(coluna, weight=1, uniform="nivel")
+        cartoes.rowconfigure(0, weight=1)
+
         ttk.Separator(self).pack(fill="x", pady=18)
-        ttk.Button(self, text="Painel de gerenciamento", style="Acento.TButton",
-                   command=lambda: abrir_painel(self, ctx)).pack(pady=(0, 6))
-        ttk.Button(self, text="Administração (relatórios do sistema e ferramentas)",
-                   command=lambda: abrir_administracao(self, ctx)).pack()
+        rodape = ttk.Frame(self)
+        rodape.pack(fill="x")
+        ttk.Button(rodape, text="Painel de gerenciamento", style="Acento.TButton",
+                   command=lambda: abrir_painel(self, ctx)).pack(side="left")
+        ttk.Label(rodape, text="Protótipo com taxa de erro conhecida — toda negação admite "
+                               "revisão humana.", style="Suave.TLabel").pack(side="right")
         if not ctx.reconhecedor.treinado:
-            ttk.Label(self, text="Nenhuma face cadastrada ainda — comece pelo Painel de gerenciamento.",
+            ttk.Label(self, text="Nenhuma face cadastrada ainda — comece pelo Painel de "
+                                 "gerenciamento para cadastrar a primeira pessoa.",
                       style="Erro.TLabel").pack(pady=(14, 0))
 
     def _autenticar(self, nivel):
@@ -104,6 +128,11 @@ def main():
         return
 
     TelaInicial(raiz, ctx)
+    # A raiz se dimensiona pelo conteúdo e, sem limite, uma tela menor que ele
+    # cortaria justamente a base — onde ficam os botões de entrar em cada nível.
+    # O mínimo é o próprio conteúdo: encolher abaixo disso só esconderia botão.
+    raiz.update_idletasks()
+    raiz.minsize(*tema.ajustar_a_tela(raiz, raiz.winfo_reqwidth(), raiz.winfo_reqheight()))
 
     def sair():
         ctx.encerrar()

@@ -57,6 +57,23 @@ CREATE TABLE bloqueio (
     bloqueado_ate DATETIME
 );
 
+-- Consentimento para tratamento de dado biométrico (LGPD art. 11, I).
+-- O hash do texto fica gravado porque o ônus de provar o consentimento é do
+-- controlador (art. 8º, §2º): registrar "aceitou a v1.0" não provaria nada se o
+-- texto da v1.0 mudasse depois. A revogação (art. 8º, §5º) é marcada aqui, não
+-- apagada — a baixa também precisa de evidência.
+CREATE TABLE consentimento (
+    id            INT          PRIMARY KEY AUTO_INCREMENT,
+    usuario_id    INT,                                    -- nulo até o cadastro concluir
+    titular_nome  VARCHAR(100) NOT NULL,
+    versao_termo  VARCHAR(10)  NOT NULL,
+    hash_termo    CHAR(64)     NOT NULL,                  -- SHA-256 do texto apresentado
+    finalidade    VARCHAR(200) NOT NULL,
+    momento       DATETIME(6)  NOT NULL,
+    revogado_em   DATETIME(6),
+    FOREIGN KEY (usuario_id) REFERENCES usuario(id)
+);
+
 -- ---------------------------------------------------------------- Camada causal
 CREATE TABLE atividade_geradora (
     id         INT          PRIMARY KEY AUTO_INCREMENT,
