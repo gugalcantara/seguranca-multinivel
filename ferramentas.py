@@ -9,12 +9,18 @@
     python -m ferramentas inspecionar REF ATUAL [--saida mapa.png]   # M-03
     python -m ferramentas expurgar-fotos     # apaga fotos de tentativas negadas expiradas
     python -m ferramentas limpar-operacao --confirmar   # zera usuários/trilha, preserva o acervo
+    python -m ferramentas preparar           # .env + banco + acervo, num passo (usado pelo instalar.bat)
 """
 import argparse
 import getpass
 import sys
 
 import configuracao
+
+
+def preparar(args):
+    import preparacao
+    sys.exit(preparacao.preparar(silencioso=args.silencioso))
 
 
 def gerar_chave(_):
@@ -174,6 +180,10 @@ def main():
                          ("gerar-acervo", gerar_acervo),
                          ("verificar-trilha", verificar_trilha), ("expurgar-fotos", expurgar_fotos)):
         sub.add_parser(nome).set_defaults(funcao=funcao)
+
+    p = sub.add_parser("preparar", help="cria/completa o .env, espera o banco e importa o acervo")
+    p.add_argument("--silencioso", action="store_true", help="só fala se algo precisar de atenção")
+    p.set_defaults(funcao=preparar)
 
     p = sub.add_parser("importar-acervo", help="carrega metadados.json no MySQL")
     p.add_argument("--recriar", action="store_true",

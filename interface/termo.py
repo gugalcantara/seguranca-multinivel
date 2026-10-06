@@ -32,6 +32,7 @@ class DialogoTermo(tk.Toplevel):
         tema.ajustar_a_tela(self, 900, 760)
         self.transient(mestre)
         self.protocol("WM_DELETE_WINDOW", self._recusar)
+        self.bind("<Escape>", lambda _: self._recusar())   # como o X: fechar é recusar
 
         tema.cabecalho(self, termo.TITULO,
                        f"Versão {termo.VERSAO} · leia antes de prosseguir · "

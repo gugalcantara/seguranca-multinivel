@@ -15,7 +15,7 @@ from acervo.repositorio_acervo import RepositorioAcervo
 from acervo.tarja import AcessoNegado
 from interface import tema
 from interface.comum import CORES_NIVEL, NOMES_NIVEL, Visor
-from interface.tema import Coluna
+from interface.tema import Coluna, legivel
 
 ROTULOS_EXPORTACAO = {"LIVRE": "livre", "COM_MARCA_DAGUA": "com marca d'água invisível",
                       "BLOQUEADA": "bloqueada — somente visualização"}
@@ -23,7 +23,7 @@ ROTULOS_EXPORTACAO = {"LIVRE": "livre", "COM_MARCA_DAGUA": "com marca d'água in
 COLUNAS_ITENS = [
     Coluna("codigo", "Código", 8),
     Coluna("titulo", "Título", 26, "w", elastica=True),
-    Coluna("tipo", "Tipo", 11),
+    Coluna("tipo", "Tipo", 11, formato=legivel),
     Coluna("nivel_minimo", "Nível", 6, "center"),
 ]
 
@@ -35,7 +35,7 @@ COLUNAS_ATIVIDADE = [
 ]
 
 COLUNAS_MOTIVO = [
-    Coluna("motivo", "Motivo", 8),
+    Coluna("motivo", "Motivo", 8, formato=legivel),
     Coluna("descricao", "Descrição", 40, "w", elastica=True),
     Coluna("pendencias", "Pendências", 11, "e"),
     Coluna("vencidas", "Vencidas", 9, "e"),
@@ -53,7 +53,7 @@ COLUNAS_VENCIDAS = [
     Coluna("municipio", "Município", 22),
     Coluna("prazo_coleta", "Prazo", 12),
     Coluna("dias_atraso", "Atraso (dias)", 13, "e"),
-    Coluna("motivo", "Motivo", 8),
+    Coluna("motivo", "Motivo", 8, formato=legivel),
 ]
 
 
@@ -64,6 +64,7 @@ class JanelaConsulta(tk.Toplevel):
         self.repo = RepositorioAcervo(ctx.banco)
         self.atual = None
         self.title(f"Acervo — {sessao.nome} (nível {sessao.nivel})")
+        self.bind("<Escape>", lambda _: self.destroy())
         self.minsize(900, 600)
         tema.ajustar_a_tela(self, 1340, 880)
         self.configure(bg=tema.FUNDO)
@@ -107,9 +108,11 @@ class JanelaConsulta(tk.Toplevel):
         politica = POLITICA_EXPORTACAO[self.sessao.nivel]
         acoes = ttk.Frame(esquerda)
         acoes.pack(fill="x", pady=(10, 0))
+        # habilita só com um item aberto: antes ele ficava ativo desde o início e
+        # o único efeito do clique era um aviso dizendo para abrir um item
+        self.exporta = politica != "BLOQUEADA"
         self.exportar = ttk.Button(acoes, text="Exportar item aberto", style="Acento.TButton",
-                                   state="disabled" if politica == "BLOQUEADA" else "normal",
-                                   command=self._exportar)
+                                   state="disabled", command=self._exportar)
         self.exportar.pack(side="left")
         ttk.Label(esquerda, text=f"Exportação: {ROTULOS_EXPORTACAO[politica]}",
                   style="Suave.TLabel").pack(anchor="w", pady=(4, 0))
@@ -119,6 +122,9 @@ class JanelaConsulta(tk.Toplevel):
                              relief="solid", borderwidth=1, background=tema.SUPERFICIE,
                              foreground=tema.TEXTO, padx=10, pady=8)
         self.ficha.pack(fill="both", expand=True)
+        self.ficha.tag_configure("orientacao", foreground=tema.TEXTO_SUAVE)
+        self._escrever_ficha("Selecione um item na lista acima para ver aqui a ficha causal.",
+                             orientacao=True)
         esquerda.pack_propagate(False)
         esquerda.configure(width=540)
 
@@ -126,8 +132,9 @@ class JanelaConsulta(tk.Toplevel):
         direita.pack(side="left", fill="both", expand=True, padx=(12, 0))
         self.titulo_item = ttk.Label(direita, style="Forte.TLabel")
         self.titulo_item.pack(anchor="w", pady=(0, 5))
-        self.visor = Visor(direita, 900, 660)
-        self.visor.pack()
+        self.visor = Visor(direita, 900, 660, style="Suave.TLabel",
+                           text="Selecione um item na lista à esquerda para abri-lo aqui.")
+        self.visor.pack(pady=(40, 0))
         return quadro
 
     def _abrir(self, item_selecionado):
@@ -142,22 +149,24 @@ class JanelaConsulta(tk.Toplevel):
                 self.destroy()
             return
         self.atual = (item_id, imagem)
+        self.visor.configure(text="")
+        self.visor.pack_configure(pady=0)
         self.visor.mostrar(imagem)
+        if self.exporta:
+            self.exportar.configure(state="normal")
         self.titulo_item.configure(text=f"{item['codigo']} — {item['titulo']}")
         self._mostrar_ficha(item)
 
     def _mostrar_ficha(self, item):
         """A2-01: ficha causal e cadeia de responsabilidade — só a partir do N2 (RF-21)."""
-        self.ficha.delete("1.0", "end")
         if not item.get("pendencia_id"):
-            self.ficha.insert("end", "Item sem pendência vinculada.")
-            return
+            return self._escrever_ficha("Item sem pendência vinculada.", orientacao=True)
         ficha = self.repo.ficha_pendencia(item["pendencia_id"], self.sessao.nivel)
         if ficha is None:
-            self.ficha.insert("end", "Ficha causal disponível a partir do nível 2.\n\n"
-                                     "O nível 1 vê apenas dados agregados, sem localização "
-                                     "nem cadeia de responsabilidade (RF-20, RF-21).")
-            return
+            return self._escrever_ficha("Ficha causal disponível a partir do nível 2.\n\n"
+                                        "O nível 1 vê apenas dados agregados, sem localização "
+                                        "nem cadeia de responsabilidade (RF-20, RF-21).",
+                                        orientacao=True)
         linhas = [f"{ficha['codigo']} — {ficha['substancia']}", "",
                   f"Atividade geradora: {ficha['atividade']}",
                   f"  {ficha['atividade_descricao']}", "",
@@ -169,7 +178,18 @@ class JanelaConsulta(tk.Toplevel):
         responsaveis = self.repo.responsaveis(item["pendencia_id"], self.sessao.nivel)
         linhas += [f"  · {r['vinculo']}: {r['nome']} ({r['situacao_cadastral']})"
                    for r in responsaveis] or ["  (nenhum visível neste nível)"]
-        self.ficha.insert("end", "\n".join(linhas))
+        self._escrever_ficha("\n".join(linhas))
+
+    def _escrever_ficha(self, texto, orientacao=False):
+        """Único ponto que escreve na ficha — e a deixa travada para edição.
+
+        A ficha é um registro do acervo, não um campo de anotação; antes o
+        tk.Text aceitava digitação e a pessoa podia escrever por cima dela.
+        """
+        self.ficha.configure(state="normal")
+        self.ficha.delete("1.0", "end")
+        self.ficha.insert("end", texto, ("orientacao",) if orientacao else ())
+        self.ficha.configure(state="disabled")
 
     def _exportar(self):
         if not self.atual:

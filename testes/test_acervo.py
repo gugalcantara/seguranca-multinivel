@@ -198,3 +198,52 @@ def test_texto_continua_com_supressao_borrada():
     suprimido = aplicar_tarja(doc, REGIOES, 1)
     assert _variancia(suprimido, REGIOES[0]) < _variancia(doc, REGIOES[0]) / 5
     assert float(suprimido[40:66, 30:430].var()) > 0.0      # não virou bloco sólido
+
+
+
+# ------------------------------------------------------------------ nível 2 sem UF (auditoria)
+class _RepoUmItem:
+    """Repositório mínimo: um item regional de SP, sem regiões sensíveis."""
+
+    def __init__(self, uf_item):
+        self.uf_item = uf_item
+        self.sqls = []
+
+    def item(self, item_id):
+        return {"id": 1, "codigo": "A2-01", "titulo": "x", "arquivo": "a2-01.png",
+                "nivel_minimo": 2, "regioes_revisadas": True, "sintetico": True, "uf": self.uf_item}
+
+    def regioes(self, item_id):
+        return []
+
+    def consultar(self, sql, parametros=()):
+        self.sqls.append((" ".join(sql.split()), list(parametros)))
+        return []
+
+
+class _TrilhaMuda:
+    def __init__(self):
+        self.registros = []
+
+    def registrar(self, r):
+        self.registros.append(r)
+
+
+def test_diretor_sem_uf_nao_abre_item_regional():
+    """Antes, "and sessao.uf" pulava a checagem: sem UF, abria-se qualquer região."""
+    from acervo.entrega import ServicoAcervo
+    from autenticacao.motor import SessaoAutenticada
+    servico = ServicoAcervo(_RepoUmItem("SP"), _TrilhaMuda())
+    with pytest.raises(AcessoNegado):
+        servico.abrir(SessaoAutenticada(1, "Sem região", 2, None, datetime.now()), 1)
+
+
+def test_listagem_do_nivel_2_sempre_filtra_a_regiao():
+    """Com ou sem UF, o SQL do N2 carrega o filtro regional."""
+    from acervo.repositorio_acervo import RepositorioAcervo
+    banco = _RepoUmItem(None)
+    repo = RepositorioAcervo(banco)
+    for uf in ("SP", None):
+        repo.itens_para_nivel(2, uf)
+    assert all("uf = %s" in sql for sql, _ in banco.sqls)
+    assert banco.sqls[1][1][-1] is None          # sem UF, compara com NULL: nunca casa

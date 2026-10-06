@@ -141,6 +141,61 @@ def formatar(valor):
     return str(valor)
 
 
+# Códigos que o banco grava e a tela mostra. Na trilha eles ficam como estão —
+# são estáveis, comparáveis e entram no hash. Na tela, "CREDENCIAL_ALHEIA" e
+# "AUTENTICACAO" obrigam a pessoa a decifrar maiúsculas sem acento; quem lê um
+# painel quer "Credencial alheia" e "Autenticação". A tradução é só de exibição:
+# ordenar e colorir as linhas continuam usando o código original.
+ROTULOS = {
+    # eventos
+    "AUTENTICACAO": "Autenticação", "CONSULTA": "Consulta", "EXPORTACAO": "Exportação",
+    "CADASTRO": "Cadastro", "VERIFICACAO": "Verificação",
+    # resultados
+    "CONCEDIDO": "Concedido", "NEGADO": "Negado",
+    # motivos da política de acesso
+    "NIVEL_INVALIDO": "Nível inválido", "USUARIO_INEXISTENTE": "Usuário inexistente",
+    "USUARIO_INATIVO": "Usuário inativo", "BLOQUEADO": "Bloqueado por tentativas",
+    "SENHA_INCORRETA": "Senha incorreta", "SENHA_FRACA": "Senha fraca",
+    "QUALIDADE_INSUFICIENTE": "Imagem sem qualidade", "FACE_NAO_RECONHECIDA": "Face não reconhecida",
+    "CREDENCIAL_ALHEIA": "Credencial alheia", "NIVEL_INSUFICIENTE": "Nível insuficiente",
+    "VIVACIDADE_NAO_CONFIRMADA": "Desafio não cumprido",
+    "SEGUNDA_PESSOA_AUSENTE": "Segunda pessoa ausente",
+    "SEGUNDA_PESSOA_INVALIDA": "Segunda pessoa inválida",
+    "JANELA_EXPIRADA": "Prazo da 2ª pessoa expirado", "ERRO_INTERNO": "Erro interno",
+    # atos administrativos e do acervo
+    "CADASTRO_USUARIO": "Usuário cadastrado", "CADASTRO_FALHOU": "Cadastro não concluído",
+    "USUARIO_DESATIVADO": "Usuário desativado", "USUARIO_REATIVADO": "Usuário reativado",
+    "CONSENTIMENTO_AUSENTE": "Sem consentimento vigente",
+    "REATIVACAO_SEM_CONSENTIMENTO": "Reativação sem consentimento",
+    "CONSENTIMENTO_RECUSADO": "Consentimento recusado",
+    "CONSENTIMENTO_REVOGADO": "Consentimento revogado",
+    "ADMIN_AUTENTICADO": "Acesso ao painel", "ADMIN_SENHA_INCORRETA": "Senha do painel incorreta",
+    "ADMIN_BLOQUEADO": "Painel bloqueado", "ACESSO_NEGADO_ITEM": "Item fora do nível",
+    "EXPORTACAO_BLOQUEADA_N3": "Exportação bloqueada (N3)", "COM_MARCA_DAGUA": "Com marca d'água",
+    "LIVRE": "Livre", "BLOQUEADA": "Bloqueada",
+    # tipos de item do acervo
+    "DOCUMENTO": "Documento", "MAPA": "Mapa", "FOTO": "Foto",
+}
+
+
+def legivel(valor):
+    """Código do banco -> texto de leitura. O que não for código passa intacto.
+
+    Para um código ainda não listado acima, cai numa versão razoável
+    ("NOVO_MOTIVO" -> "Novo motivo") em vez de exibir o código cru. Só conta
+    como código o texto em maiúsculas, com 4+ caracteres e sem hífen: "SP" e
+    "A1-05" seguem como estão.
+    """
+    if valor is None:
+        return "—"
+    texto = str(valor)
+    if texto in ROTULOS:
+        return ROTULOS[texto]
+    if len(texto) >= 4 and texto.replace("_", "").isalnum() and texto.isupper():
+        return texto.replace("_", " ").capitalize()
+    return texto
+
+
 def _chave_ordem(valor):
     """Ordena coluna de tipo misto sem explodir: nulos, números, datas, texto.
 

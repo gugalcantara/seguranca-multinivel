@@ -62,6 +62,7 @@ class Motivo(str, Enum):
     NIVEL_INVALIDO = "NIVEL_INVALIDO"
     USUARIO_INEXISTENTE = "USUARIO_INEXISTENTE"
     USUARIO_INATIVO = "USUARIO_INATIVO"
+    CONSENTIMENTO_AUSENTE = "CONSENTIMENTO_AUSENTE"
     BLOQUEADO = "BLOQUEADO"
     SENHA_INCORRETA = "SENHA_INCORRETA"
     SENHA_FRACA = "SENHA_FRACA"
@@ -89,6 +90,8 @@ MENSAGENS = {
     Motivo.NIVEL_INVALIDO: "Nível de acesso inválido.",
     Motivo.USUARIO_INEXISTENTE: "Matrícula ou senha incorretas. Confira os dois campos.",
     Motivo.USUARIO_INATIVO: ("Este cadastro está inativo. Procure o administrador para reativá-lo."),
+    Motivo.CONSENTIMENTO_AUSENTE: ("Não há consentimento vigente para o uso da sua imagem facial. "
+                                   "Para voltar a acessar, refaça o cadastro com o termo de consentimento."),
     Motivo.BLOQUEADO: ("Matrícula bloqueada por tentativas seguidas. Aguarde alguns minutos "
                        "ou procure o administrador."),
     Motivo.SENHA_INCORRETA: "Matrícula ou senha incorretas. Confira os dois campos.",
@@ -120,6 +123,7 @@ class Evidencias:
     usuario_id: int | None = None          # identidade alegada (N2/N3) ou identificada (N1)
     usuario_nivel: int | None = None
     usuario_ativo: bool | None = None
+    consentimento_ok: bool | None = None    # termo aceito e não revogado (LGPD art. 8º e 11)
     bloqueado: bool | None = None
     senha_ok: bool | None = None
     senha_forte: bool | None = None
@@ -193,6 +197,12 @@ def decidir(ev: Evidencias, limiares: dict, janela_regra_dois: float, exigir_reg
     # --- Situação cadastral e nível (cada nível vê o que os de baixo veem)
     if ev.usuario_ativo is not True:
         return negar(Motivo.USUARIO_INATIVO)
+    # Sem consentimento vigente não há base legal para tratar a face (LGPD art. 8º,
+    # §5º e art. 11, I). Antes o único guarda era `ativo`: revogar desativava, mas
+    # "Reativar" no painel — ou um UPDATE no banco — devolvia o acesso a um rosto
+    # que continua no modelo. Como todo fator, ausência de evidência nega.
+    if ev.consentimento_ok is not True:
+        return negar(Motivo.CONSENTIMENTO_AUSENTE)
     if ev.usuario_nivel is None or ev.usuario_nivel < ev.nivel_solicitado:
         return negar(Motivo.NIVEL_INSUFICIENTE)
 

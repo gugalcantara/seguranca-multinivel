@@ -1,0 +1,5 @@
+# Scripts do Windows saem sempre com CRLF no clone, qualquer que seja a
+# configuracao de Git de quem clonar: o cmd interpreta mal .bat com fim de
+# linha Unix, e o instalar.bat e o primeiro arquivo que um colega abre.
+*.bat text eol=crlf
+*.ps1 text eol=crlf

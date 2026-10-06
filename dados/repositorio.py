@@ -116,6 +116,17 @@ class RepositorioConsentimento:
                         (momento or datetime.now(), usuario_id))
             return cur.rowcount
 
+    def vigente(self, usuario_id):
+        """True se há ao menos um consentimento aceito e NÃO revogado.
+
+        É a pergunta que a decisão de acesso faz a cada autenticação: o campo
+        `ativo` do usuário não basta, porque pode ser religado sem novo termo.
+        """
+        linhas = self.banco.consultar(
+            "SELECT 1 AS vigente FROM consentimento "
+            "WHERE usuario_id = %s AND revogado_em IS NULL LIMIT 1", (usuario_id,))
+        return bool(linhas)
+
     def do_usuario(self, usuario_id):
         return self.banco.consultar(
             "SELECT * FROM consentimento WHERE usuario_id = %s ORDER BY id DESC", (usuario_id,))

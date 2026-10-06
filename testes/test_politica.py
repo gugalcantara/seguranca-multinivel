@@ -8,19 +8,19 @@ JANELA = 120
 
 
 def ev_n1(**kw):
-    base = dict(nivel_solicitado=1, usuario_id=7, usuario_nivel=1, usuario_ativo=True,
+    base = dict(nivel_solicitado=1, usuario_id=7, usuario_nivel=1, usuario_ativo=True, consentimento_ok=True,
                 qualidade_ok=True, distancia=40.0)
     return Evidencias(**{**base, **kw})
 
 
 def ev_n2(**kw):
-    base = dict(nivel_solicitado=2, usuario_id=7, usuario_nivel=2, usuario_ativo=True, bloqueado=False,
+    base = dict(nivel_solicitado=2, usuario_id=7, usuario_nivel=2, usuario_ativo=True, consentimento_ok=True, bloqueado=False,
                 senha_ok=True, qualidade_ok=True, distancia=40.0)
     return Evidencias(**{**base, **kw})
 
 
 def ev_n3(**kw):
-    base = dict(nivel_solicitado=3, usuario_id=7, usuario_nivel=3, usuario_ativo=True, bloqueado=False,
+    base = dict(nivel_solicitado=3, usuario_id=7, usuario_nivel=3, usuario_ativo=True, consentimento_ok=True, bloqueado=False,
                 senha_ok=True, senha_forte=True, qualidade_ok=True, distancia=30.0, vivacidade_ok=True,
                 segundo_usuario_id=8, segundo_usuario_nivel=3, segundo_autenticado=True,
                 segundos_desde_primeiro=30)

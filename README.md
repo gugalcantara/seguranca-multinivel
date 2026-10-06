@@ -3,7 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-contrib%204.10-5C3EE8?logo=opencv&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
-![Testes](https://img.shields.io/badge/testes-264%20passando-1f7a4d)
+![Testes](https://img.shields.io/badge/testes-310%20passando-1f7a4d)
 
 Aplicação desktop em Python que protege um cadastro **fictício** de materiais perigosos ainda não recolhidos —
 resíduo químico Classe I, rejeito radioativo, áreas contaminadas. O acesso combina **senha e reconhecimento
@@ -149,6 +149,11 @@ rosto desconhecido ou de rosto que não casa com a matrícula: dizer *"não conf
 quem tenta entrar que a **senha** estava correta. A distinção existe, mas só no motivo gravado na trilha, onde
 serve à auditoria e não ao atacante.
 
+No formulário, a senha é conferida **enquanto é digitada**: um checklist marca cada exigência cumprida — e o
+mínimo de caracteres muda sozinho ao escolher o nível 3. Antes, a pessoa só descobria o que faltava depois
+de clicar. O checklist não tem regra própria: lê as pendências da mesma função que valida o formulário, então
+nunca marca ✓ num critério que a validação recusaria.
+
 A matrícula é **gerada pelo sistema**, nunca escolhida: o alfabeto exclui `I`, `O`, `0` e `1` — os caracteres que
 mais se confundem ao ler de um crachá — porque ela é digitada no login dos níveis 2 e 3.
 
@@ -160,58 +165,67 @@ dizendo *por que* cada uma foi recusada (*muito escura*, *fora de foco*, *mais d
 
 ## Instalação
 
-**Requisitos:** uma webcam, mais três programas instalados uma única vez por máquina:
-
-| | Para quê | Como instalar no Windows |
-|---|---|---|
-| **Git** | clonar o repositório | `winget install Git.Git` |
-| **uv** | baixa o Python 3.11 sem mexer no Python do sistema | `winget install astral-sh.uv` |
-| **Docker Desktop** | sobe o MySQL 8 sem instalar banco na máquina | `winget install Docker.DockerDesktop` |
-
-Feche e reabra o terminal depois de instalar, para o `PATH` atualizar. Sem Docker, dá para usar um MySQL
-próprio — veja a observação no fim desta seção.
+**Uma vez por máquina**, instale o **Docker Desktop** — ele roda o banco de dados do projeto:
 
 ```powershell
-# 1. ambiente virtual com Python 3.11 (o uv baixa a versão se faltar)
-uv venv --python 3.11 .venv
-uv pip install --python .venv\Scripts\python.exe -r requirements.txt
-
-# 2. banco — o Docker Desktop precisa estar ABERTO e com o ícone "running"
-docker compose up -d        # publica o MySQL em 127.0.0.1:3307 e cria o schema
-
-# 3. credenciais
-Copy-Item .env.exemplo .env
-.venv\Scripts\python.exe -m ferramentas gerar-chave     # cole em CHAVE_CIFRAGEM
-.venv\Scripts\python.exe -m ferramentas hash-admin      # cole em ADMIN_SENHA_HASH
-
-# 4. acervo de exemplo (só depois que o banco terminar de subir — ver abaixo)
-.venv\Scripts\python.exe -m ferramentas importar-acervo
-
-# 5. conferir o ambiente (webcam, FPS, LBPH, KCF, MySQL)
-.venv\Scripts\python.exe verificar_ambiente.py
+winget install Docker.DockerDesktop
 ```
 
-> **O passo 2 não termina quando o comando volta.** O `docker compose up -d` devolve o prompt assim que o
-> contêiner sobe, mas o MySQL ainda leva alguns segundos para executar `sql/01` a `sql/03` na primeira vez. Se o
-> passo 4 reclamar de conexão ou de tabela inexistente, espere e repita — não é erro de configuração.
-> Para acompanhar: `docker compose logs -f mysql`, até aparecer *ready for connections*.
+Reinicie o computador e abra o Docker Desktop uma vez. É o único programa que o instalador não instala sozinho,
+porque exige reinicialização. Depois disso, são **dois arquivos**:
 
-> ⚠️ **A armadilha nº 1 do projeto:** é preciso `opencv-contrib-python`. O `opencv-python` comum **não tem
-> `cv2.face`** (LBPH), e os dois no mesmo ambiente conflitam em silêncio. O `requirements.txt` já está correto —
-> não instale outro OpenCV por cima.
+| | Quando |
+|---|---|
+| **`instalar.bat`** — dois cliques | na primeira vez; e sempre que algo parecer quebrado, porque ele refaz só o que falta |
+| **`executar.bat`** — dois cliques | para abrir o programa, todas as vezes |
 
-> ⚠️ **No Windows, `python` pode não ser o do ambiente.** Se o venv não estiver ativado, `python` resolve para o
-> Python do sistema e o erro aparece num lugar que não faz sentido nenhum — já vimos
-> `ModuleNotFoundError: No module named 'tempfile'`, que é a biblioteca padrão faltando, não uma dependência do
-> projeto. Na dúvida, chame o interpretador pelo caminho: `.venv\Scripts\python.exe -m pytest`. Para ativar,
-> `.venv\Scripts\Activate.ps1`; se o PowerShell recusar, `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+O instalador só pergunta uma coisa: a **senha do administrador**, que abre o Painel de gerenciamento — mínimo de
+12 caracteres, com maiúscula, minúscula, número e símbolo (ex.: `Unip#Aps2026`). Se faltar algo, ele diz o quê e
+pede de novo. Com o programa aberto, comece pelo **Painel de gerenciamento** e cadastre as pessoas: o banco começa
+vazio.
 
-Sem Docker, execute `sql/01_schema.sql`, `sql/02_dados_iniciais.sql` e `sql/03_usuarios.sql` como root, nessa
-ordem — e no `.env` troque `DB_PORTA` para **3306**, a porta padrão de um MySQL instalado na máquina. O 3307 do
-`docker-compose.yml` existe justamente para não colidir com ele.
+<details>
+<summary><b>O que o instalador faz — e os tropeços que ele evita</b></summary>
 
-Com tudo pronto, `main.py` abre sem nenhum usuário cadastrado: comece pelo **Painel de gerenciamento**, que pede
-a senha do administrador definida no passo 3, e cadastre as identidades antes de tentar qualquer nível.
+Antes eram três programas, oito comandos e duas edições à mão no `.env`, e quem instalou tropeçou em algo
+diferente. Cada etapa abaixo existe por causa de um desses tropeços:
+
+| Etapa | O tropeço que ela evita |
+|---|---|
+| Acha um Python **3.11 cujo `tkinter` carrega**; se não houver, instala o oficial pelo `winget` | No Windows 11 com *Smart App Control*, o Python baixado pelo `uv` é bloqueado justamente no `tkinter` — e a aplicação inteira é Tk |
+| Cria o `.venv` e **nunca usa `python` solto** | `python` apontando para outro Python, com erros sem sentido como `No module named 'tempfile'` |
+| Abre o Docker Desktop se estiver fechado e **espera o MySQL ficar pronto** | o banco leva alguns segundos para criar as tabelas na primeira vez, e o passo seguinte falhava cedo demais |
+| Cria o `.env`, **gera a chave** de cifragem e grava o hash da senha | copiar a chave e o hash à mão para o `.env`; senha recusada pela política sem dizer o que faltava |
+| **Corrige `DB_PORTA` para 3307** se o banco do projeto estiver lá | `.env` com 3306, a porta de um MySQL instalado na máquina, que responde `Access denied` |
+| Detecta banco de **versão anterior** e explica como recriar | cadastro falhando por falta de tabela — sem apagar nada por conta própria |
+| Importa o acervo **só se estiver vazio** | importar duas vezes |
+
+Pode rodar o `instalar.bat` quantas vezes quiser: o que já existe é mantido. Ele **nunca troca** um valor que já
+está no `.env` — em especial a `CHAVE_CIFRAGEM`, que, trocada, tornaria ilegível o modelo com os rostos já
+cadastrados. A lógica está em [`preparacao.py`](preparacao.py), com testes em `testes/test_preparacao.py`.
+
+</details>
+
+<details>
+<summary><b>Instalação manual, passo a passo</b> (para quem prefere ou não está no Windows)</summary>
+
+```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+docker compose up -d                              # MySQL em 127.0.0.1:3307
+.venv\Scripts\python.exe -m ferramentas preparar  # .env, chave, senha, espera o banco, acervo
+.venv\Scripts\python.exe main.py
+```
+
+- Use sempre o `python.exe` do `.venv`, ou ative-o com `.venv\Scripts\Activate.ps1` — se o PowerShell recusar,
+  `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+- É preciso `opencv-contrib-python`. O `opencv-python` comum **não tem `cv2.face`** (LBPH), e os dois no mesmo
+  ambiente conflitam em silêncio. O `requirements.txt` já está correto — não instale outro OpenCV por cima.
+- Sem Docker, execute `sql/01_schema.sql`, `sql/02_dados_iniciais.sql` e `sql/03_usuarios.sql` como root, nessa
+  ordem, e use `DB_PORTA=3306` no `.env` — a porta padrão de um MySQL instalado na máquina.
+- Para conferir webcam, FPS, LBPH e KCF: `.venv\Scripts\python.exe verificar_ambiente.py`.
+
+</details>
 
 ---
 
@@ -219,9 +233,11 @@ a senha do administrador definida no passo 3, e cadastre as identidades antes de
 
 | Comando | O que faz |
 |---|---|
-| `python main.py` | Aplicação completa. Comece pelo **Painel de gerenciamento** e cadastre os usuários |
+| `executar.bat` | Aplicação completa (garante Docker e banco antes). Comece pelo **Painel de gerenciamento** |
+| `instalar.bat` | Instala e prepara tudo; rode de novo quando algo parecer quebrado |
+| `python -m ferramentas preparar` | O passo final do instalador sozinho: `.env`, chave, senha, banco e acervo |
 | `python esqueleto.py Gustavo Ana` | **Prova das 5 fases sem banco**: captura, treina em memória e reconhece ao vivo mostrando nome, distância, ms e FPS |
-| `python -m pytest` | Os 264 testes (não precisa de câmera; o de integração sobe um banco descartável) |
+| `python -m pytest` | Os 310 testes (não precisa de câmera; o de integração sobe um banco descartável) |
 | `python -m ferramentas verificar-trilha` | Verifica a cadeia de hash e aponta onde ela foi rompida |
 | `python -m ferramentas extrair-marca ARQ.png` | Recupera quem exportou um arquivo, e quando |
 | `python -m ferramentas inspecionar REF ATUAL` | Compara duas fotos de acondicionamento (ORB + SSIM) |
@@ -299,7 +315,7 @@ lgpd/          termo (texto versionado + hash do que foi apresentado)
 interface/     tema (paleta, Cartao, Tabela) · comum (Contexto, Visor, portão admin) · painel
                autenticacao · relatorios · cadastro · termo (consentimento prévio)
 experimentos/  protocolo (divisão por sessão) · metricas (FAR/FRR/EER/DET) · executar · capturar
-testes/        conftest (uma raiz Tk por sessão) · 19 módulos · 264 testes
+testes/        conftest (uma raiz Tk por sessão) · 20 módulos · 310 testes
 sql/           schema com camada causal · dados de referência · contas separadas
 ```
 
@@ -342,6 +358,15 @@ Pontos em que a implementação divergiu do plano inicial, e por quê:
 7. **Os testes de integração têm banco próprio**, recriado a cada execução. Antes sujavam o banco de demonstração,
    e limpar depois era impossível sem quebrar a cadeia: `usuario_id` entra no hash e a FK prende o usuário.
 8. **A exportação gera PNG, não PDF.** LSB e DCT marcam pixels; um PDF exigiria rasterizar.
+9. **O modelo LBPH é gravado em binário comprimido, e o 1:1 compara só com o alegado.** Medido com 8 pessoas ×
+   80 amostras (a escala da base da ETP), o YAML em texto ocupava 215 MB e levava ~4 s para gravar a cada
+   cadastro e ~3,7 s para carregar na abertura. O próprio OpenCV grava em binário com o sufixo `?base64` no nome
+   e comprime com `.gz`: 18,7 MB, ~1,3 s e ~1,4 s, com os histogramas idênticos bit a bit — e modelos antigos
+   continuam abrindo. Já o 1:1 dos níveis 2 e 3 media a distância à galeria **inteira** para depois filtrar o
+   alegado: 42 ms por quadro com 8 pessoas e 150 ms com 30 — abaixo dos 10 FPS do RNF-01. Calculando só contra as
+   amostras do alegado, com a mesma fórmula do OpenCV, cai para ~11 ms e deixa de crescer com a galeria. As
+   distâncias coincidem até a 7ª casa significativa, então os limiares continuam valendo; há teste que compara
+   as duas contas. O 1:N do nível 1 ficou no OpenCV: reproduzido em numpy, saía mais lento.
 
 ### Borrar um gráfico não esconde onde as coisas estão
 
@@ -412,12 +437,21 @@ controlador (art. 8º, §2º), e registrar "aceitou a versão 1.0" não provaria
 depois. A revogação (art. 8º, §5º) está implementada no painel e é **marcada, nunca apagada** — a baixa também
 é evidência, e o cadastro é desativado junto, porque sem consentimento não resta base legal.
 
+O consentimento também é **fator da decisão de acesso**, verificado a cada autenticação em todos os níveis: sem
+um termo aceito e não revogado, o acesso é negado mesmo com a face, a senha e o cadastro ativo corretos. Uma
+auditoria mostrou por que isso é necessário — a revogação desativava o usuário, mas o rosto dele continua no
+modelo, e "Reativar" no painel devolvia o acesso sem novo termo. Agora a reativação de quem revogou é recusada
+(e a tentativa fica na trilha), e mesmo um `UPDATE` direto no banco não basta, porque a política consulta o
+consentimento, não só o campo `ativo`.
+
 - Imagens faciais **nunca vão para disco** no fluxo da aplicação: ficam em memória, treinam o modelo e são
   descartadas. O modelo é salvo **cifrado** (Fernet) em `modelo/lbph.yml.enc`.
 - O descarte cobre **toda** saída da tela de captura — concluir, cancelar, `Esc`, o X da janela, fechar a janela
   de trás e falhar no meio do cadastro — e cada uma dessas saídas tem teste próprio (ver abaixo).
-- Fotos de tentativas negadas são guardadas **cifradas** e com prazo de expiração; `ferramentas expurgar-fotos`
-  apaga as vencidas. Sem `CHAVE_CIFRAGEM` no `.env` a foto é simplesmente descartada — falha segura.
+- Fotos de tentativas negadas são guardadas **cifradas** e com prazo de expiração, e o programa elimina as
+  vencidas **sozinho** — ao abrir e de hora em hora. Antes o prazo era só um rótulo e dependia de alguém rodar
+  `ferramentas expurgar-fotos`; como essas fotos são em geral de quem nunca consentiu, guardá-las além do prazo
+  era o ponto mais delicado. Sem `CHAVE_CIFRAGEM` no `.env` a foto é simplesmente descartada — falha segura.
 - Todo o conteúdo do acervo é **sintético** — empresas, municípios e coordenadas inventados — e aparece com a
   faixa permanente "DADO FICTÍCIO".
 - O `.gitignore` bloqueia `.env`, `modelo/`, `dados_faciais/`, `*.yml` e dumps do banco.

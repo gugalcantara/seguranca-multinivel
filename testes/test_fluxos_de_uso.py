@@ -569,8 +569,10 @@ def test_autenticacao_sem_webcam_nega_e_deixa_repetir(raiz, ctx):
     janela = JanelaAutenticacao(raiz, ctx, 1, lambda sessao: None)
     janela.withdraw()
 
-    assert "negado" in str(janela.status.cget("text")).lower()
-    assert janela.tentar.winfo_manager() == ""      # só aparece após uma negação de fato
+    texto = str(janela.status.cget("text"))
+    assert "webcam" in texto.lower() and "Privacidade" in texto   # diz onde olhar
+    # e oferece repetir: antes a única saída era fechar e reabrir a janela
+    assert janela.tentar.winfo_manager() == "pack"
 
 
 # ------------------------------------------------------------------ portão administrativo
@@ -784,3 +786,219 @@ def test_cartao_do_nivel_3_na_tela_inicial_acompanha_a_configuracao():
     texto = main.fatores_do_nivel_3(cfg)
     assert "segunda pessoa" not in texto
     assert "desafio na câmera" in texto        # o que continua valendo segue anunciado
+
+
+
+# ------------------------------------------------------------------ melhorias de interface
+@pytest.fixture
+def tela_inicial(raiz, ctx, monkeypatch):
+    import main
+    abertas = []
+    monkeypatch.setattr(main, "JanelaAutenticacao",
+                        lambda mestre, c, nivel, ao: abertas.append(nivel) or tk.Toplevel(mestre))
+    tela = main.TelaInicial(raiz, ctx)
+    # a raiz da suíte fica oculta, e evento de teclado não chega a janela oculta:
+    # sem mapeá-la, os testes de atalho passariam por não receber evento NENHUM
+    raiz.deiconify()
+    raiz.update()
+    yield tela, abertas
+    raiz.withdraw()
+    tela.destroy()
+    for nivel in ("1", "2", "3"):
+        raiz.unbind(f"<Key-{nivel}>")
+    raiz.unbind("<Control-p>")
+
+
+def test_tecla_numerica_abre_o_nivel_na_tela_inicial(raiz, tela_inicial):
+    tela, abertas = tela_inicial
+    raiz.focus_force()
+    raiz.update()
+    raiz.event_generate("<Key-2>", when="now")
+    assert abertas == [2]
+
+
+def test_digitar_numero_em_outra_janela_nao_abre_nivel(raiz, tela_inicial):
+    """Os atalhos não podem disparar enquanto se digita uma senha com dígitos."""
+    tela, abertas = tela_inicial
+    outra = tk.Toplevel(raiz)
+    campo = tk.Entry(outra)
+    campo.pack()
+    raiz.update()
+    campo.focus_force()
+    raiz.update()
+    campo.event_generate("<Key-1>", when="now")
+    raiz.update()
+    assert abertas == []
+    # prova de que o evento chegou ao campo — senão o teste passaria em vão
+    assert campo.get() == "1"
+    outra.destroy()
+
+
+def test_segundo_clique_nao_abre_segunda_autenticacao(raiz, tela_inicial):
+    """Duas janelas disputariam a mesma câmera."""
+    tela, abertas = tela_inicial
+    tela._autenticar(1)
+    tela._autenticar(1)
+    tela._autenticar(3)
+    assert abertas == [1]
+
+
+def test_codigos_do_banco_viram_texto_legivel_so_na_tela():
+    from interface.tema import legivel
+    assert legivel("CREDENCIAL_ALHEIA") == "Credencial alheia"
+    assert legivel("AUTENTICACAO") == "Autenticação"
+    assert legivel("UM_CODIGO_NOVO") == "Um codigo novo"      # código não listado: legível mesmo assim
+    for intacto in ("SP", "A1-05", "MP-01", "Ana Ribeiro", "42"):
+        assert legivel(intacto) == intacto                     # o que não é código passa sem mudança
+    assert legivel(None) == "—"
+
+
+@pytest.mark.parametrize("nivel, senha, cumpridos", [
+    (1, "", set()),
+    (1, "abcdefgh", {"tamanho", "minuscula", "confere"}),
+    (1, "Abcdef1!", {"tamanho", "minuscula", "maiuscula", "digito", "simbolo", "confere"}),
+    (3, "Abcdef1!", {"minuscula", "maiuscula", "digito", "simbolo", "confere"}),   # N3 pede 12
+    (3, "Abcdefgh123!", {"tamanho", "minuscula", "maiuscula", "digito", "simbolo", "confere"}),
+])
+def test_checklist_da_senha_acompanha_a_validacao(raiz, ctx, nivel, senha, cumpridos):
+    """O ✓ do checklist e a validação do formulário têm de dizer a mesma coisa."""
+    from interface.cadastro import DialogoNovoUsuario
+    d = DialogoNovoUsuario(raiz, ctx)
+    d.withdraw()
+    d.nivel.current(nivel - 1)
+    d._ajustar_uf()
+    for chave in ("senha", "confirmacao"):
+        d.campos[chave].insert(0, senha)
+    d._avaliar_senha()
+    marcados = {c for c, (rotulo, _) in d._itens_senha.items()
+                if str(rotulo.cget("text")).startswith("✓")}
+    assert marcados == cumpridos
+
+
+def test_mostrar_senha_revela_e_volta_a_esconder(raiz, ctx):
+    from interface.cadastro import DialogoNovoUsuario
+    d = DialogoNovoUsuario(raiz, ctx)
+    d.withdraw()
+    d.mostrar_senha.set(True); d._alternar_senha()
+    assert d.campos["senha"].cget("show") == "" and d.campos["confirmacao"].cget("show") == ""
+    d.mostrar_senha.set(False); d._alternar_senha()
+    assert d.campos["senha"].cget("show") == "•"
+
+
+def test_nivel_aparece_com_o_nome_e_continua_sendo_lido_como_numero(raiz, ctx):
+    from interface.cadastro import DialogoNovoUsuario
+    d = DialogoNovoUsuario(raiz, ctx)
+    d.withdraw()
+    d.nivel.current(2)
+    assert "Custódia" in d.nivel.get() and d._nivel_escolhido() == 3
+
+
+def test_ficha_causal_nao_aceita_digitacao(raiz, ctx):
+    """A ficha é registro do acervo, não campo de anotação."""
+    from acervo.entrega import ServicoAcervo
+    from acervo.repositorio_acervo import RepositorioAcervo
+    from autenticacao.motor import SessaoAutenticada
+    from interface.relatorios import JanelaConsulta
+    from testes.test_painel import BancoDuble
+
+    class Acervo(ServicoAcervo):
+        def listar(self, sessao): return []
+
+    class Repo(RepositorioAcervo):
+        def agregado_por_atividade(self): return []
+        def agregado_por_motivo(self): return []
+        def pendencias_vencidas(self, nivel, uf=None): return []
+
+    ctx.acervo = Acervo(Repo(BancoDuble()), ctx.trilha)
+    j = JanelaConsulta(raiz, ctx, SessaoAutenticada(1, "Ana", 2, "SP", datetime.now()))
+    j.withdraw()
+    assert str(j.ficha.cget("state")) == "disabled"
+    assert str(j.exportar.cget("state")) == "disabled"      # nada aberto, nada a exportar
+    j._escrever_ficha("texto qualquer")
+    assert str(j.ficha.cget("state")) == "disabled"
+
+
+
+def test_toda_janela_da_aplicacao_fecha_com_esc():
+    """A tela inicial promete "Esc fecha a janela" — a promessa tem de valer para todas."""
+    import inspect
+    import interface.autenticacao, interface.cadastro, interface.painel
+    import interface.relatorios, interface.termo
+    classes = [interface.cadastro.DialogoNovoUsuario, interface.cadastro.JanelaImportarImagens,
+               interface.cadastro.JanelaCaptura, interface.autenticacao.JanelaAutenticacao,
+               interface.termo.DialogoTermo, interface.painel.JanelaPainel,
+               interface.relatorios.JanelaConsulta]
+    sem_esc = [c.__name__ for c in classes if '"<Escape>"' not in inspect.getsource(c)]
+    assert sem_esc == []
+
+
+
+# ------------------------------------------------------------------ retenção das fotos (auditoria)
+class TrilhaComExpurgo(TrilhaDuble):
+    def __init__(self, falhar=False):
+        super().__init__()
+        self.expurgos = 0
+        self.falhar = falhar
+
+    def expurgar_fotos_expiradas(self):
+        self.expurgos += 1
+        if self.falhar:
+            raise RuntimeError("banco fora do ar")
+        return 2
+
+
+def test_fotos_vencidas_sao_eliminadas_ao_abrir_o_programa(ctx):
+    """O prazo de retenção só vale se alguém o aplica — agora é o próprio programa."""
+    import main
+    ctx.trilha = TrilhaComExpurgo()
+    assert main.expurgar_fotos_vencidas(ctx) == 2
+    assert ctx.trilha.expurgos == 1
+
+
+def test_expurgo_se_repete_enquanto_o_programa_esta_aberto(raiz, ctx, monkeypatch):
+    import main
+    ctx.trilha = TrilhaComExpurgo()
+    agendados = []
+    monkeypatch.setattr(raiz, "after", lambda ms, f: agendados.append(ms))
+    main.expurgar_fotos_vencidas(ctx, raiz)
+    assert agendados == [main.INTERVALO_EXPURGO_MS]
+
+
+def test_falha_no_expurgo_nao_impede_o_programa_de_abrir(ctx, caplog):
+    import main
+    ctx.trilha = TrilhaComExpurgo(falhar=True)
+    assert main.expurgar_fotos_vencidas(ctx) is None
+    assert "tentativas negadas" in caplog.text
+
+
+
+def test_abrir_o_programa_elimina_as_fotos_vencidas(raiz, ctx, monkeypatch):
+    """O caminho real de inicialização chama o expurgo — não só a função existe.
+
+    Testar a função isolada deixava passar o caso mais provável de regressão: um
+    refactor de main() que simplesmente esquecesse a chamada.
+    """
+    import main
+    ctx.trilha = TrilhaComExpurgo()
+    monkeypatch.setattr(raiz, "after", lambda ms, f: None)
+    tela = main.iniciar_interface(raiz, ctx)
+    try:
+        assert ctx.trilha.expurgos == 1
+    finally:
+        tela.destroy()
+        for nivel in ("1", "2", "3"):
+            raiz.unbind(f"<Key-{nivel}>")
+        raiz.unbind("<Control-p>")
+
+
+
+def test_main_monta_a_janela_pelo_caminho_testado():
+    """Verificação ESTRUTURAL, e de propósito: main() cria o Tk e entra no laço de
+    eventos, então nenhum teste consegue executá-la. Garantir que ela delega a
+    iniciar_interface — que é testada acima — é o que liga as duas pontas."""
+    import inspect
+
+    import main
+    fonte = inspect.getsource(main.main)
+    assert "iniciar_interface(raiz, ctx)" in fonte
+    assert "TelaInicial(" not in fonte      # montar por fora pularia o expurgo

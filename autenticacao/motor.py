@@ -31,7 +31,7 @@ from autenticacao import politica, senha
 from autenticacao.politica import ConfirmadorFrames, Decisao, Evidencias, Motivo
 from autenticacao.vivacidade import DesafioVivacidade, Estado
 from dados.auditoria import novo_registro
-from dados.repositorio import RepositorioBloqueio, RepositorioUsuarios
+from dados.repositorio import RepositorioBloqueio, RepositorioConsentimento, RepositorioUsuarios
 from visao.pipeline import PipelineFacial
 
 
@@ -130,6 +130,7 @@ class MotorAutenticacao:
         self.cfg = cfg or configuracao.carregar()
         self.usuarios = RepositorioUsuarios(banco)
         self.bloqueios = RepositorioBloqueio(banco)
+        self.consentimentos = RepositorioConsentimento(banco)
         self.trilha = trilha
         self.pipeline = PipelineFacial(reconhecedor, self.cfg)
         self.limiares = {n: configuracao.limiar(n) for n in (1, 2, 3)}
@@ -195,6 +196,7 @@ class MotorAutenticacao:
             if usuario:
                 ev.usuario_nivel = usuario["nivel_id"]
                 ev.usuario_ativo = bool(usuario["ativo"])
+                ev.consentimento_ok = self.consentimentos.vigente(usuario["id"])
             # exigir_segunda_pessoa aqui é redundante POR CONSTRUÇÃO: com
             # exigir_regra_dois=False o bloco da regra já não roda, e o resultado
             # é idêntico com qualquer valor. Fica explícito mesmo assim, para que

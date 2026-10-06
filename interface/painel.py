@@ -27,7 +27,7 @@ from dados.relatorios_sistema import RelatoriosSistema
 from interface import tema
 from interface.cadastro import DialogoNovoUsuario
 from interface.comum import Visor, exigir_administrador
-from interface.tema import Coluna
+from interface.tema import Coluna, legivel
 
 def _situacao(valor):
     """ativo chega do MySQL como 0/1 (BOOLEAN), não como bool do Python."""
@@ -48,14 +48,14 @@ COLUNAS_USUARIOS = [
 COLUNAS_EVENTOS = [
     Coluna("id", "Id", 5, "e"),
     Coluna("momento", "Momento", 20),
-    Coluna("evento", "Evento", 14),
+    Coluna("evento", "Evento", 14, formato=legivel),
     Coluna("nivel", "Nível", 6, "center"),
-    Coluna("resultado", "Resultado", 11),
-    Coluna("motivo", "Motivo", 26, "w", elastica=True),
+    Coluna("resultado", "Resultado", 11, formato=legivel),
+    Coluna("motivo", "Motivo", 26, "w", elastica=True, formato=legivel),
 ]
 
 COLUNAS_MOTIVOS = [
-    Coluna("motivo", "Motivo da negação", 26, "w", elastica=True),
+    Coluna("motivo", "Motivo da negação", 26, "w", elastica=True, formato=legivel),
     Coluna("nivel", "Nível", 6, "center"),
     Coluna("eventos", "Nº", 5, "e"),
     Coluna("distancia_media", "Dist.", 9, "e"),
@@ -73,18 +73,18 @@ CAMPOS_FICHA = [
 RELATORIOS = {
     "S-01": ("S-01 · Log de acessos", [
         Coluna("id", "Id", 6, "e"), Coluna("momento", "Momento", 20),
-        Coluna("evento", "Evento", 14), Coluna("nivel", "Nível", 6, "center"),
+        Coluna("evento", "Evento", 14, formato=legivel), Coluna("nivel", "Nível", 6, "center"),
         Coluna("usuario_id", "Usuário", 8, "center"),
         Coluna("usuario2_id", "2ª pessoa", 9, "center"),
-        Coluna("item_id", "Item", 6, "center"), Coluna("resultado", "Resultado", 11),
-        Coluna("motivo", "Motivo", 26, "w", elastica=True),
+        Coluna("item_id", "Item", 6, "center"), Coluna("resultado", "Resultado", 11, formato=legivel),
+        Coluna("motivo", "Motivo", 26, "w", elastica=True, formato=legivel),
         Coluna("distancia", "Distância", 10, "e"),
     ], lambda r: r.s01_log_acessos()),
     "S-02": ("S-02 · Tentativas negadas", [
         Coluna("id", "Id", 6, "e"), Coluna("momento", "Momento", 20),
         Coluna("nivel", "Nível", 6, "center"), Coluna("matricula", "Matrícula informada", 18),
         Coluna("usuario_id", "Usuário", 8, "center"),
-        Coluna("motivo", "Motivo", 26, "w", elastica=True),
+        Coluna("motivo", "Motivo", 26, "w", elastica=True, formato=legivel),
         Coluna("distancia", "Distância", 10, "e"),
         Coluna("foto", "Foto", 6, "center", formato=lambda v: "sim" if v else "—"),
         Coluna("expira_em", "Expira em", 20),
@@ -94,8 +94,8 @@ RELATORIOS = {
         Coluna("bloqueado_ate", "Bloqueada até", 20),
     ], lambda r: r.s03_bloqueios_ativos()),
     "S-05": ("S-05 · Estatísticas de reconhecimento", [
-        Coluna("nivel", "Nível", 6, "center"), Coluna("resultado", "Resultado", 11),
-        Coluna("motivo", "Motivo", 26, "w", elastica=True),
+        Coluna("nivel", "Nível", 6, "center"), Coluna("resultado", "Resultado", 11, formato=legivel),
+        Coluna("motivo", "Motivo", 26, "w", elastica=True, formato=legivel),
         Coluna("eventos", "Eventos", 8, "e"),
         Coluna("distancia_media", "Distância média", 14, "e"),
         Coluna("qualidade_media", "Qualidade média", 14, "e"),
@@ -124,7 +124,7 @@ RELATORIOS = {
         Coluna("usuario_id", "Usuário", 8, "center"),
         Coluna("nome", "Nome", 22, "w", elastica=True),
         Coluna("nivel", "Nível", 6, "center"), Coluna("item", "Item", 10),
-        Coluna("resultado", "Resultado", 11), Coluna("motivo", "Motivo", 24),
+        Coluna("resultado", "Resultado", 11, formato=legivel), Coluna("motivo", "Motivo", 24, formato=legivel),
     ], lambda r: r.s07_auditoria_exportacao()),
 }
 
@@ -168,6 +168,7 @@ class JanelaPainel(tk.Toplevel):
         self.ctx = ctx
         self.relatorios = RelatoriosSistema(ctx.banco)
         self.title("Painel de gerenciamento")
+        self.bind("<Escape>", lambda _: self.destroy())
         # dimensão relativa à tela: um tamanho fixo em pixels fica apertado em
         # monitor com escala de DPI, onde as fontes ocupam mais espaço
         self.minsize(900, 600)
@@ -372,6 +373,19 @@ class JanelaPainel(tk.Toplevel):
             return
         ativo = bool(usuario["ativo"])
         acao = "desativar" if ativo else "reativar"
+        if not ativo and not self._consentimento_vigente(usuario):
+            # Reativar quem revogou o consentimento devolveria o acesso a um rosto
+            # que continua no modelo, sem base legal. A tentativa fica na trilha.
+            self.ctx.trilha.registrar(novo_registro(
+                "CADASTRO", usuario["nivel_id"], "NEGADO", "REATIVACAO_SEM_CONSENTIMENTO",
+                usuario_id=usuario["id"]))
+            return messagebox.showwarning(
+                "Reativação não permitida",
+                f"{usuario['nome']} não tem consentimento vigente para o uso da imagem facial "
+                "— foi revogado ou nunca registrado.\n\n"
+                "Sem consentimento não há base legal para tratar a face (LGPD art. 11, I). "
+                "Para voltar a dar acesso, faça um novo cadastro: ele apresenta o termo de novo.",
+                parent=self)
         if not messagebox.askyesno("Situação do usuário",
                                    f"Confirma {acao} {usuario['nome']} "
                                    f"({usuario['matricula']})?", parent=self):
@@ -383,6 +397,16 @@ class JanelaPainel(tk.Toplevel):
             "CADASTRO", usuario["nivel_id"], "CONCEDIDO",
             "USUARIO_DESATIVADO" if ativo else "USUARIO_REATIVADO", usuario_id=usuario["id"]))
         self.atualizar()
+
+    def _consentimento_vigente(self, usuario):
+        """Sem repositório de consentimento não há como provar o aceite: nega."""
+        repo = getattr(self.ctx, "consentimentos", None)
+        if repo is None:
+            return False
+        try:
+            return repo.vigente(usuario["id"])
+        except Exception:
+            return False                       # na dúvida, não reativa
 
     def _revogar_consentimento(self):
         """Direito do titular de revogar o consentimento (LGPD art. 8º, §5º).

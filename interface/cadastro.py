@@ -38,6 +38,29 @@ UFS = ["", "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS
        "PI", "PR", "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO"]
 
 
+OPCOES_NIVEL = [f"{n} — {tema.NOMES_NIVEL[n]}" for n in (1, 2, 3)]
+
+# Critérios exibidos no checklist da senha. O "cumprido" de cada um NÃO é
+# recalculado aqui: sai das pendências que senha.avaliar_senha_forte devolve,
+# a mesma função que valida o formulário. Duas regras paralelas acabariam
+# divergindo, e a tela marcaria ✓ num critério que a validação recusa.
+CRITERIOS_SENHA = (
+    ("tamanho", None),                         # texto depende do nível (8 ou 12+)
+    ("minuscula", "minúscula"),
+    ("maiuscula", "maiúscula"),
+    ("digito", "número"),
+    ("simbolo", "símbolo"),
+    ("confere", "senhas iguais"),
+)
+_PENDENCIA_DO_CRITERIO = {
+    "tamanho": lambda p: p.startswith("ao menos"),
+    "minuscula": lambda p: p == "uma letra minúscula",
+    "maiuscula": lambda p: p == "uma letra maiúscula",
+    "digito": lambda p: p == "um dígito",
+    "simbolo": lambda p: p == "um símbolo",
+}
+
+
 class DialogoNovoUsuario(tk.Toplevel):
     """Cadastro de usuário: formulário, captura facial e treino incremental (RF-01).
 
@@ -58,13 +81,15 @@ class DialogoNovoUsuario(tk.Toplevel):
 
         form = ttk.Frame(self, padding=16)
         form.pack(fill="both", expand=True)
+        # a coluna dos campos estica: com `width` em caracteres, a matrícula
+        # (fonte de código) saía bem mais larga que os outros campos
+        form.columnconfigure(1, weight=1, minsize=280)
         self.campos = {}
         for linha, (rotulo, chave) in enumerate((("Matrícula", "matricula"), ("Nome", "nome"),
                                                  ("Senha", "senha"), ("Confirmar senha", "confirmacao"))):
             ttk.Label(form, text=rotulo).grid(row=linha, column=0, sticky="w", pady=3, padx=(0, 10))
-            entrada = ttk.Entry(form, width=28,
-                                show="•" if "senha" in chave or chave == "confirmacao" else "")
-            entrada.grid(row=linha, column=1, pady=3, sticky="w")
+            entrada = ttk.Entry(form, show="•" if chave in ("senha", "confirmacao") else "")
+            entrada.grid(row=linha, column=1, pady=3, sticky="ew")
             self.campos[chave] = entrada
 
         # A matrícula é gerada pelo sistema, não escolhida: evita colisão, evita
@@ -73,28 +98,50 @@ class DialogoNovoUsuario(tk.Toplevel):
         ttk.Button(form, text="Gerar outra", width=11,
                    command=self._gerar_matricula).grid(row=0, column=2, padx=(8, 0))
         self._gerar_matricula()
-        ttk.Label(form, text="Nível").grid(row=4, column=0, sticky="w", pady=3, padx=(0, 10))
-        self.nivel = ttk.Combobox(form, values=[1, 2, 3], width=6, state="readonly")
+
+        self.mostrar_senha = tk.BooleanVar(value=False)
+        ttk.Checkbutton(form, text="Mostrar", variable=self.mostrar_senha,
+                        command=self._alternar_senha).grid(row=2, column=2, sticky="w", padx=(8, 0))
+
+        # Checklist da senha, atualizado a cada tecla. Antes, a pessoa só
+        # descobria o que faltava DEPOIS de clicar, num aviso que sumia — e a
+        # exigência muda com o nível (12 caracteres no N3, 8 nos outros).
+        self.checklist = ttk.Frame(form)
+        self.checklist.grid(row=4, column=1, columnspan=2, sticky="w", pady=(2, 6))
+        self._itens_senha = {}
+        for coluna, (chave, texto) in enumerate(CRITERIOS_SENHA):
+            rotulo = ttk.Label(self.checklist, style="Suave.TLabel")
+            rotulo.grid(row=coluna // 3, column=coluna % 3, sticky="w", padx=(0, 14))
+            self._itens_senha[chave] = (rotulo, texto)
+        for chave in ("senha", "confirmacao"):
+            self.campos[chave].bind("<KeyRelease>", lambda _: self._avaliar_senha(), add="+")
+
+        ttk.Label(form, text="Nível").grid(row=5, column=0, sticky="w", pady=3, padx=(0, 10))
+        # o nível aparece com o nome: "1" sozinho obrigava a lembrar o que cada
+        # número libera na hora de decidir o acesso de alguém
+        self.nivel = ttk.Combobox(form, values=OPCOES_NIVEL, state="readonly")
         self.nivel.current(0)
-        self.nivel.grid(row=4, column=1, sticky="w", pady=3)
+        self.nivel.grid(row=5, column=1, sticky="ew", pady=3)
         self.nivel.bind("<<ComboboxSelected>>", self._ajustar_uf)
-        ttk.Label(form, text="UF").grid(row=5, column=0, sticky="w", pady=3, padx=(0, 10))
+        ttk.Label(form, text="UF").grid(row=6, column=0, sticky="w", pady=3, padx=(0, 10))
         self.uf = ttk.Combobox(form, values=UFS, width=6, state="readonly")
-        self.uf.grid(row=5, column=1, sticky="w", pady=3)
+        self.uf.grid(row=6, column=1, sticky="w", pady=3)
         self.nota_uf = ttk.Label(form, style="Suave.TLabel")
-        self.nota_uf.grid(row=5, column=2, sticky="w", padx=(8, 0))
+        self.nota_uf.grid(row=6, column=1, sticky="w", padx=(70, 0))
         self._ajustar_uf()
         ttk.Label(form, text="Só cadastre quem assinou o termo de autorização\n"
                              "de uso de imagem (LGPD art. 11).",
-                  style="Erro.TLabel").grid(row=6, column=0, columnspan=3, sticky="w", pady=(12, 0))
+                  style="Erro.TLabel").grid(row=7, column=0, columnspan=3, sticky="w", pady=(12, 0))
 
         acoes = ttk.Frame(form)
-        acoes.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(14, 0))
+        acoes.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(14, 0))
         ttk.Button(acoes, text="Capturar pela webcam", style="Acento.TButton",
                    command=self._cadastrar_webcam).pack(side="left")
         ttk.Button(acoes, text="Usar imagens…",
                    command=self._cadastrar_imagens).pack(side="left", padx=6)
         ttk.Button(acoes, text="Cancelar", command=self.destroy).pack(side="right")
+        self.bind("<Escape>", lambda _: self.destroy())
+        self._avaliar_senha()
         self.campos["nome"].focus_set()
 
     # O formulário é validado ANTES de abrir a captura, qualquer que seja a
@@ -135,6 +182,35 @@ class DialogoNovoUsuario(tk.Toplevel):
 
         DialogoTermo(self, dados["nome"], decidiu)
 
+    def _nivel_escolhido(self):
+        """1, 2 ou 3 — a opção exibida é "2 — Consulta restrita"."""
+        return int(self.nivel.get().split()[0])
+
+    def _minimo_senha(self):
+        if self._nivel_escolhido() == 3:
+            return self.ctx.cfg.getint("autenticacao", "senha_forte_min_caracteres")
+        return 8
+
+    def _alternar_senha(self):
+        caractere = "" if self.mostrar_senha.get() else "•"
+        for chave in ("senha", "confirmacao"):
+            self.campos[chave].configure(show=caractere)
+
+    def _avaliar_senha(self):
+        """Marca no checklist o que a senha digitada já cumpre."""
+        digitada = self.campos["senha"].get()
+        minimo = self._minimo_senha()
+        pendencias = senha.avaliar_senha_forte(digitada, minimo)
+        for chave, (rotulo, texto) in self._itens_senha.items():
+            if chave == "confere":
+                cumprido = bool(digitada) and digitada == self.campos["confirmacao"].get()
+            else:
+                cumprido = bool(digitada) and not any(
+                    _PENDENCIA_DO_CRITERIO[chave](p) for p in pendencias)
+            texto = texto or f"{minimo}+ caracteres"
+            rotulo.configure(text=f"{'✓' if cumprido else '○'} {texto}",
+                             foreground=tema.OK if cumprido else tema.TEXTO_SUAVE)
+
     def _ajustar_uf(self, _=None):
         """A UF só filtra no nível 2.
 
@@ -142,12 +218,14 @@ class DialogoNovoUsuario(tk.Toplevel):
         nos dois a UF é ignorada na consulta. Deixar o campo editável ali sugere
         um efeito que não existe, então ele é desabilitado e explicado.
         """
-        nivel_2 = self.nivel.get() == "2"
+        nivel_2 = self._nivel_escolhido() == 2
         self.uf.configure(state="readonly" if nivel_2 else "disabled")
         if not nivel_2:
             self.uf.set("")
         self.nota_uf.configure(text="região que o diretor enxerga" if nivel_2
                                else "só se aplica ao nível 2")
+        if hasattr(self, "_itens_senha"):
+            self._avaliar_senha()                  # o mínimo de caracteres muda com o nível
 
     def _gerar_matricula(self):
         campo = self.campos["matricula"]
@@ -165,15 +243,14 @@ class DialogoNovoUsuario(tk.Toplevel):
     def _validar(self):
         """Devolve (dados, nivel) se o formulário está consistente, ou None."""
         dados = {k: v.get().strip() for k, v in self.campos.items()}
-        nivel = int(self.nivel.get())
+        nivel = self._nivel_escolhido()
         if not dados["matricula"] or not dados["nome"]:
             messagebox.showwarning("Cadastro", "Preencha matrícula e nome.", parent=self)
             return None
         if dados["senha"] != dados["confirmacao"]:
             messagebox.showwarning("Cadastro", "As senhas não conferem.", parent=self)
             return None
-        minimo = self.ctx.cfg.getint("autenticacao", "senha_forte_min_caracteres")
-        pendencias = senha.avaliar_senha_forte(dados["senha"], minimo if nivel == 3 else 8)
+        pendencias = senha.avaliar_senha_forte(dados["senha"], self._minimo_senha())
         if pendencias:
             messagebox.showwarning("Cadastro", "Senha fraca — falta: " + ", ".join(pendencias),
                                    parent=self)

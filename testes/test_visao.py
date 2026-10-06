@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from cryptography.fernet import Fernet
 
-from visao.extracao import ReconhecedorLBPH
+from visao.extracao import _GZIP, ReconhecedorLBPH
 from visao.preprocessamento import PreProcessador
 from visao.qualidade import PortaoQualidade, nitidez, ruido
 
@@ -97,3 +97,70 @@ def test_modelo_cifrado_em_repouso(tmp_path):
     outro = ReconhecedorLBPH().carregar(caminho, chave)
     amostra = _textura(3, ruido_px=6)
     assert outro.identificar(amostra) == rec.identificar(amostra)
+
+
+
+# ------------------------------------------------------------------ otimizações do LBPH
+def _verificar_como_antes(rec, face, usuario_id):
+    """O 1:1 da versão anterior, mantido aqui como referência: mede contra a
+    galeria inteira e filtra depois. A otimização só vale se der o MESMO número."""
+    coletor = cv2.face.StandardCollector_create()
+    rec.modelo.predict_collect(face, coletor)
+    distancias = [d for rotulo, d in coletor.getResults() if rotulo == usuario_id]
+    return min(distancias) if distancias else float("inf")
+
+
+def test_1_para_1_otimizado_da_a_mesma_distancia_que_o_opencv():
+    """Os limiares de [limiares] foram pensados para a distância do OpenCV.
+
+    Se a conta otimizada divergisse, um usuário poderia passar a ser aceito ou
+    recusado só por causa da troca de implementação — sem nenhuma mudança na
+    face nem no limiar. A tolerância é de arredondamento de float32.
+    """
+    rec = _modelo()
+    for ident in (1, 2, 3):
+        for alegado in (1, 2, 3):
+            face = _textura(ident, ruido_px=6)
+            antes = _verificar_como_antes(rec, face, alegado)
+            agora = rec.verificar(face, alegado)
+            assert abs(agora - antes) <= 1e-4 * max(1.0, antes), (ident, alegado, antes, agora)
+
+
+def test_cadastro_novo_aparece_no_1_para_1_sem_reiniciar():
+    """O 1:1 guarda os histogramas em cache; um cadastro novo tem de invalidá-lo,
+    senão a pessoa recém-cadastrada só seria reconhecida após reabrir o programa."""
+    rec = _modelo()
+    face = _textura(4, ruido_px=6)
+    assert rec.verificar(face, 4) == float("inf")           # monta o cache sem a identidade 4
+    rec.atualizar([_textura(4, ruido_px=6) for _ in range(6)], [4] * 6)
+    assert rec.verificar(face, 4) < rec.verificar(face, 1)
+
+
+def test_modelo_gravado_no_formato_texto_antigo_continua_abrindo(tmp_path):
+    """Quem cadastrou rostos antes da otimização não pode perder o modelo:
+    as faces já foram descartadas (LGPD), então não haveria como retreinar."""
+    rec = _modelo()
+    texto = tmp_path / "antigo.yml"
+    rec.modelo.write(str(texto))                              # o formato de antes
+    chave = Fernet.generate_key()
+    cifrado = tmp_path / "lbph.yml.enc"
+    cifrado.write_bytes(Fernet(chave).encrypt(texto.read_bytes()))
+    texto.unlink()
+
+    outro = ReconhecedorLBPH().carregar(cifrado, chave)
+    amostra = _textura(2, ruido_px=6)
+    assert outro.identificar(amostra) == rec.identificar(amostra)
+    assert outro.verificar(amostra, 2) == rec.verificar(amostra, 2)
+
+
+def test_modelo_novo_e_binario_comprimido_e_bem_menor(tmp_path):
+    """O ganho da otimização, fixado em teste para não regredir em silêncio."""
+    rec = _modelo()
+    chave = Fernet.generate_key()
+    novo = tmp_path / "novo.enc"
+    rec.salvar(novo, chave)
+    assert Fernet(chave).decrypt(novo.read_bytes())[:2] == _GZIP          # gzip
+
+    texto = tmp_path / "texto.yml"
+    rec.modelo.write(str(texto))
+    assert len(Fernet(chave).decrypt(novo.read_bytes())) * 4 < texto.stat().st_size

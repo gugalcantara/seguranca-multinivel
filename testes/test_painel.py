@@ -168,7 +168,11 @@ def test_tabela_de_eventos_traz_as_colunas_do_select(raiz):
     primeira = painel.tabela_eventos.arvore.item("0", "values")
     colunas = {c.chave: v for c, v in zip(painel.tabela_eventos.colunas, primeira)}
     assert colunas["nivel"] == "2"                    # não "—"
-    assert colunas["evento"] == "AUTENTICACAO"
+    # a TELA mostra o rótulo legível; o dado por trás continua o código do banco,
+    # que é o que a ordenação, as cores e a trilha usam
+    assert colunas["evento"] == "Autenticação"
+    painel.tabela_eventos.arvore.selection_set("0")
+    assert painel.tabela_eventos.selecionada()["evento"] == "AUTENTICACAO"
     assert colunas["id"] == "4"                       # mais recente primeiro (ORDER BY id DESC)
     assert "usuario_id" not in colunas                # resumo não carrega essa coluna
 
@@ -237,8 +241,17 @@ def test_desativar_usuario_grava_update_e_entra_na_trilha(raiz, monkeypatch):
     assert registrado["usuario_id"] == 1 and registrado["evento"] == "CADASTRO"
 
 
+class ConsentimentoVigente:
+    def __init__(self, vigente=True):
+        self._vigente = vigente
+
+    def vigente(self, usuario_id):
+        return self._vigente
+
+
 def test_reativar_usuario_inativo_usa_o_motivo_oposto(raiz, monkeypatch):
     painel, ctx, _ = montar(raiz)
+    ctx.consentimentos = ConsentimentoVigente(True)          # titular com termo em dia
     monkeypatch.setattr("interface.painel.messagebox.askyesno", lambda *a, **k: True)
 
     selecionar(raiz, painel, 2)                          # J. Moreira, inativo
@@ -343,3 +356,38 @@ def test_revogar_sem_selecionar_ninguem_nao_faz_nada(raiz, monkeypatch):
 
     painel._revogar_consentimento()
     assert ordem == []
+
+
+
+@pytest.mark.parametrize("repositorio", [ConsentimentoVigente(False), None],
+                         ids=["consentimento revogado", "sem como verificar"])
+def test_reativar_sem_consentimento_e_recusado_e_auditado(raiz, monkeypatch, repositorio):
+    """Achado da auditoria: dois cliques em "Reativar" devolviam o acesso a quem
+    revogou o consentimento. Agora a reativação é recusada — e a tentativa entra
+    na trilha, porque também é um ato administrativo."""
+    painel, ctx, banco = montar(raiz)
+    ctx.consentimentos = repositorio
+    perguntas, avisos = [], []
+    monkeypatch.setattr("interface.painel.messagebox.askyesno",
+                        lambda *a, **k: perguntas.append(a) or True)
+    monkeypatch.setattr("interface.painel.messagebox.showwarning",
+                        lambda *a, **k: avisos.append(a))
+
+    selecionar(raiz, painel, 2)                          # J. Moreira, inativo
+    painel._alternar_situacao()
+
+    assert not [e for e in banco.execucoes if "UPDATE usuario SET ativo" in e[0]]
+    assert perguntas == []                               # nem chega a perguntar
+    assert "consentimento" in avisos[0][1].lower()
+    assert ctx.trilha.registros[-1]["motivo"] == "REATIVACAO_SEM_CONSENTIMENTO"
+    assert ctx.trilha.registros[-1]["resultado"] == "NEGADO"
+
+
+def test_desativar_nao_depende_de_consentimento(raiz, monkeypatch):
+    """A guarda vale só para religar: desativar alguém sempre pode."""
+    painel, ctx, banco = montar(raiz)
+    ctx.consentimentos = ConsentimentoVigente(False)
+    monkeypatch.setattr("interface.painel.messagebox.askyesno", lambda *a, **k: True)
+    selecionar(raiz, painel, 0)                          # Caio Lima, ativo
+    painel._alternar_situacao()
+    assert [e for e in banco.execucoes if "UPDATE usuario SET ativo" in e[0]]

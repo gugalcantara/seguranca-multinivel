@@ -115,17 +115,18 @@ class Medidor(ttk.Frame):
         self.rotulo_tempo.configure(text=f"{segundos:.0f} s restantes")
         if distancia is None:
             return self.rotulo_distancia.configure(
-                text=f"distância —   ·   limiar {self.limiar:.0f}", foreground=tema.TEXTO_SUAVE)
+                text=f"distância —   ·   aceita até {self.limiar:.0f}", foreground=tema.TEXTO_SUAVE)
         dentro = distancia <= self.limiar
         self.rotulo_distancia.configure(
-            text=f"distância {distancia:.1f}   ·   limiar {self.limiar:.0f}   "
+            text=f"distância {distancia:.1f}".replace(".", ",")
+                 + f"   ·   aceita até {self.limiar:.0f}   "
                  f"{'✓' if dentro else '✗'}", foreground=tema.OK if dentro else tema.ERRO)
 
     def limpar(self):
         self.barra.configure(value=0)
         self.rotulo_progresso.configure(text="aguardando o rosto")
         self.rotulo_tempo.configure(text="")
-        self.rotulo_distancia.configure(text=f"distância —   ·   limiar {self.limiar:.0f}",
+        self.rotulo_distancia.configure(text=f"distância —   ·   aceita até {self.limiar:.0f}",
                                         foreground=tema.TEXTO_SUAVE)
 
 
@@ -185,7 +186,7 @@ class JanelaAutenticacao(tk.Toplevel):
         self.matricula.bind("<Return>", lambda _: self.senha.focus_set())
         ttk.Button(self.formulario, text="Continuar", style="Acento.TButton",
                    command=self._continuar).grid(row=3, column=1, sticky="e", pady=(10, 0))
-        ttk.Label(self.formulario, style="Detalhe.TLabel",
+        ttk.Label(self.formulario, style="Suave.TLabel",
                   text="A matrícula é o código do crachá, como R0902G8.").grid(
             row=4, column=1, sticky="w", pady=(8, 0))
 
@@ -274,7 +275,13 @@ class JanelaAutenticacao(tk.Toplevel):
         try:
             self.ctx.camera()
         except WebcamIndisponivel as erro:
-            self._mensagem(f"Webcam indisponível — acesso negado. ({erro})", VERMELHO)
+            # o botão de repetir aparece também aqui: antes, a única saída era
+            # fechar e reabrir a janela depois de liberar a câmera
+            self._mensagem("Não foi possível abrir a webcam. Feche outros programas que estejam "
+                           "usando a câmera e confira em Configurações › Privacidade › Câmera "
+                           f"se o Windows permite o acesso. ({erro})", VERMELHO)
+            self.tentar.pack(side="right", padx=(0, 8))
+            self.tentar.focus_set()
             return
         self.tentativa = self.motor.iniciar_face(self.nivel, ev, usuario)
         self._laco()

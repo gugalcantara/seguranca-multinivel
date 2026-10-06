@@ -233,3 +233,56 @@ def test_conta_da_aplicacao_nao_apaga_consentimento(banco_demonstracao):
         with banco_demonstracao.transacao() as cur:
             cur.execute("DELETE FROM consentimento WHERE id = -1")
     assert erro.value.errno == 1142        # DELETE command denied
+
+
+
+# ------------------------------------------------------------------ nível 2 sem UF (auditoria)
+def test_banco_recusa_diretor_de_nivel_2_sem_uf(banco):
+    """A regra mora no schema: nenhum caminho — formulário, ferramenta ou SQL
+    manual — consegue criar o diretor que, sem UF, veria todas as regiões."""
+    with pytest.raises(mysql.connector.Error):
+        RepositorioUsuarios(banco).criar(_matricula(), "Diretor sem região", 2, "$2b$12$" + "x" * 53)
+
+
+def test_nivel_2_sem_uf_so_ve_itens_nacionais(acervo_importado):
+    """Se um N2 sem UF existisse mesmo assim, o filtro falharia FECHADO."""
+    todos = acervo_importado.itens_para_nivel(2, "SP")
+    sem_uf = acervo_importado.itens_para_nivel(2, None)
+    assert all(item["uf"] is None for item in sem_uf)
+    assert len(sem_uf) < len(todos) or not any(i["uf"] for i in todos)
+
+
+
+def test_consentimento_vigente_segue_o_aceite_e_a_revogacao(banco):
+    """A pergunta que a decisão de acesso faz agora, contra o schema de verdade."""
+    from dados.repositorio import RepositorioConsentimento
+    from lgpd import termo
+
+    repo = RepositorioConsentimento(banco)
+    uid = RepositorioUsuarios(banco).criar(_matricula(), "Bia Torres", 1,
+                                           senha.gerar_hash("Teste#2026abc", custo=4))
+    assert repo.vigente(uid) is False                    # sem termo, sem base legal
+    repo.registrar("Bia Torres", termo.VERSAO, termo.hash_termo(), usuario_id=uid)
+    assert repo.vigente(uid) is True
+    repo.revogar(uid)
+    assert repo.vigente(uid) is False                    # revogado deixa de valer
+
+
+
+def test_expurgo_elimina_so_as_fotos_vencidas(banco):
+    """O DELETE que agora roda sozinho ao abrir o programa, contra o schema real:
+    a foto vencida sai, a que ainda está no prazo fica, e a trilha não é tocada."""
+    from cryptography.fernet import Fernet
+    trilha = TrilhaAuditoria(banco)
+    chave = Fernet.generate_key()
+    vencida = trilha.registrar(novo_registro("AUTENTICACAO", 1, "NEGADO", "FACE_NAO_RECONHECIDA"))
+    no_prazo = trilha.registrar(novo_registro("AUTENTICACAO", 1, "NEGADO", "FACE_NAO_RECONHECIDA"))
+    trilha.anexar_foto_negada(vencida, b"jpeg-vencido", chave, dias_retencao=-1)
+    trilha.anexar_foto_negada(no_prazo, b"jpeg-no-prazo", chave, dias_retencao=7)
+    registros_antes = len(banco.consultar("SELECT id FROM log_acesso"))
+
+    assert trilha.expurgar_fotos_expiradas() >= 1
+    restantes = {r["log_id"] for r in banco.consultar("SELECT log_id FROM tentativa_negada")}
+    assert vencida not in restantes and no_prazo in restantes
+    assert len(banco.consultar("SELECT id FROM log_acesso")) == registros_antes
+    assert trilha.verificar().integra

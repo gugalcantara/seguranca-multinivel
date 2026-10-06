@@ -20,7 +20,11 @@ class RepositorioAcervo:
         sql = ("SELECT * FROM item_acervo WHERE nivel_minimo <= %s "
                "AND (regioes_revisadas = TRUE OR %s >= 3)")
         parametros = [nivel, nivel]
-        if nivel == 2 and uf:
+        # O filtro regional vale SEMPRE no nível 2, mesmo sem UF. Antes ele só era
+        # aplicado "se houvesse UF" — e um diretor com UF nula via todas as regiões,
+        # o oposto da falha segura. Com uf=None, "uf = NULL" nunca é verdadeiro:
+        # sobram só os itens nacionais, o mesmo que pendencias_vencidas já fazia.
+        if nivel == 2:
             sql += " AND (uf IS NULL OR uf = %s)"
             parametros.append(uf)
         return self.banco.consultar(sql + " ORDER BY nivel_minimo, codigo", parametros)

@@ -46,7 +46,8 @@ class ServicoAcervo:
         try:
             if item is None:
                 raise AcessoNegado("Item inexistente")
-            if sessao.nivel == 2 and item["uf"] and sessao.uf and item["uf"] != sessao.uf:
+            # sem "and sessao.uf": diretor sem região não abre item regional nenhum
+            if sessao.nivel == 2 and item["uf"] and item["uf"] != sessao.uf:
                 raise AcessoNegado("Item de outra região")
             original = cv2.imread(str(configuracao.caminho("acervo") / item["arquivo"]))
             if original is None:

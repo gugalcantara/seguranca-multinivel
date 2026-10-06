@@ -51,6 +51,33 @@ def _montar_contexto():
     )
 
 
+INTERVALO_EXPURGO_MS = 60 * 60 * 1000      # repete de hora em hora com o programa aberto
+
+
+def expurgar_fotos_vencidas(ctx, raiz=None):
+    """Apaga as fotos de tentativas negadas que passaram do prazo de retenção.
+
+    O prazo existia (`retencao_foto_negada_dias`), mas só como rótulo: nada o
+    aplicava, e o expurgo dependia de alguém lembrar de rodar
+    `ferramentas expurgar-fotos`. Essas fotos são de quem foi NEGADO — em geral
+    alguém que nunca consentiu —, então guardá-las além do necessário é
+    justamente o que a LGPD veda (art. 15 e 16: eliminação ao fim do tratamento).
+
+    Falhar aqui não impede o programa de abrir: o erro vai para o log e a
+    próxima rodada tenta de novo.
+    """
+    try:
+        removidas = ctx.trilha.expurgar_fotos_expiradas()
+        if removidas:
+            logging.info("%d foto(s) de tentativas negadas expiradas foram eliminadas", removidas)
+    except Exception:
+        logging.exception("Falha ao eliminar fotos de tentativas negadas expiradas")
+        removidas = None
+    if raiz is not None:
+        raiz.after(INTERVALO_EXPURGO_MS, lambda: expurgar_fotos_vencidas(ctx, raiz))
+    return removidas
+
+
 # O que cada nível exige e entrega — na porta de entrada, não só na documentação.
 NIVEIS = {
     1: ("face apenas, sem senha",
@@ -106,15 +133,54 @@ class TelaInicial(ttk.Frame):
         rodape.pack(fill="x")
         ttk.Button(rodape, text="Painel de gerenciamento", style="Acento.TButton",
                    command=lambda: abrir_painel(self, ctx)).pack(side="left")
-        ttk.Label(rodape, text="Protótipo com taxa de erro conhecida — toda negação admite "
-                               "revisão humana.", style="Suave.TLabel").pack(side="right")
+        ttk.Label(rodape, text="Atalhos: 1, 2 e 3 abrem os níveis  ·  Ctrl+P, o painel  ·  Esc fecha a janela",
+                  style="Suave.TLabel").pack(side="right")
+        ttk.Label(self, text="Protótipo com taxa de erro conhecida — toda negação admite revisão humana.",
+                  style="Suave.TLabel").pack(anchor="e", pady=(6, 0))
+
+        # Atalhos na janela principal. Ficam presos à raiz, então digitar um
+        # número dentro de outra janela (matrícula, senha) não abre nível nenhum:
+        # o evento de teclado de uma janela filha não chega aos bindings da raiz.
+        raiz = self.winfo_toplevel()
+        for nivel in (1, 2, 3):
+            raiz.bind(f"<Key-{nivel}>", lambda _, n=nivel: self._autenticar(n))
+        raiz.bind("<Control-p>", lambda _: abrir_painel(self, ctx))
         if not ctx.reconhecedor.treinado:
             ttk.Label(self, text="Nenhuma face cadastrada ainda — comece pelo Painel de "
                                  "gerenciamento para cadastrar a primeira pessoa.",
                       style="Erro.TLabel").pack(pady=(14, 0))
 
     def _autenticar(self, nivel):
-        JanelaAutenticacao(self, self.ctx, nivel, lambda sessao: JanelaConsulta(self, self.ctx, sessao))
+        """Abre a autenticação do nível — uma de cada vez.
+
+        Dois cliques (ou a tecla repetida) abriam duas janelas disputando a mesma
+        câmera. Se já houver uma aberta, ela é trazida para a frente.
+        """
+        aberta = getattr(self, "_janela_auth", None)
+        if aberta is not None and aberta.winfo_exists():
+            aberta.deiconify()
+            aberta.lift()
+            aberta.focus_force()
+            return
+        self._janela_auth = JanelaAutenticacao(
+            self, self.ctx, nivel, lambda sessao: JanelaConsulta(self, self.ctx, sessao))
+
+
+def iniciar_interface(raiz, ctx):
+    """Tudo o que acontece entre o contexto pronto e a janela principal na tela.
+
+    Fica fora de main() para ser testável: main() cria o Tk e entra no laço de
+    eventos, e um teste não consegue observá-la por dentro. Foi assim que a
+    chamada do expurgo de fotos podia sumir sem nenhum teste acusar.
+    """
+    expurgar_fotos_vencidas(ctx, raiz)
+    tela = TelaInicial(raiz, ctx)
+    # A raiz se dimensiona pelo conteúdo e, sem limite, uma tela menor que ele
+    # cortaria justamente a base — onde ficam os botões de entrar em cada nível.
+    # O mínimo é o próprio conteúdo: encolher abaixo disso só esconderia botão.
+    raiz.update_idletasks()
+    raiz.minsize(*tema.ajustar_a_tela(raiz, raiz.winfo_reqwidth(), raiz.winfo_reqheight()))
+    return tela
 
 
 def main():
@@ -142,12 +208,7 @@ def main():
         raiz.destroy()
         return
 
-    TelaInicial(raiz, ctx)
-    # A raiz se dimensiona pelo conteúdo e, sem limite, uma tela menor que ele
-    # cortaria justamente a base — onde ficam os botões de entrar em cada nível.
-    # O mínimo é o próprio conteúdo: encolher abaixo disso só esconderia botão.
-    raiz.update_idletasks()
-    raiz.minsize(*tema.ajustar_a_tela(raiz, raiz.winfo_reqwidth(), raiz.winfo_reqheight()))
+    iniciar_interface(raiz, ctx)
 
     def sair():
         ctx.encerrar()

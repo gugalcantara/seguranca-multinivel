@@ -74,11 +74,15 @@ class TrilhaDuble:
 
 
 class BancoDuble:
-    def __init__(self, usuarios=()):
+    def __init__(self, usuarios=(), sem_consentimento=()):
         self.usuarios = list(usuarios)
+        # por padrão todo usuário consentiu; os testes de consentimento listam quem não
+        self.sem_consentimento = set(sem_consentimento)
 
     def consultar(self, sql, parametros=()):
         s = " ".join(sql.split())
+        if "FROM consentimento" in s and "revogado_em IS NULL" in s:
+            return [] if parametros[0] in self.sem_consentimento else [{"vigente": 1}]
         if "FROM usuario WHERE id" in s:
             return [u for u in self.usuarios if u["id"] == parametros[0]]
         if "FROM usuario WHERE matricula" in s:
@@ -96,7 +100,7 @@ def ev_com_senha(nivel, usuario_id):
 
 
 def montar(nivel, analise=None, usuario=None, usuarios_no_banco=(), ev=None,
-           exigir_segunda_pessoa=True):
+           exigir_segunda_pessoa=True, sem_consentimento=()):
     """exigir_segunda_pessoa é EXPLÍCITO aqui de propósito.
 
     O config.ini pode desligar a regra dos dois, e vários testes deste módulo
@@ -104,7 +108,7 @@ def montar(nivel, analise=None, usuario=None, usuarios_no_banco=(), ev=None,
     arquivo faria a cobertura da regra evaporar em silêncio no dia em que alguém
     a desligasse — que foi exatamente o que aconteceu quando o padrão mudou.
     """
-    banco = BancoDuble(usuarios_no_banco)
+    banco = BancoDuble(usuarios_no_banco, sem_consentimento)
     trilha = TrilhaDuble()
     motor = MotorAutenticacao(banco, None, trilha, configuracao.carregar())
     motor.exigir_segunda_pessoa = exigir_segunda_pessoa
@@ -226,7 +230,7 @@ def test_etapa_individual_do_n3_nao_vai_sozinha_para_a_trilha():
 def test_regra_dos_dois_exige_outra_identidade_de_nivel_3():
     motor, _, trilha = montar(3, usuario=USUARIO_N3,
                               usuarios_no_banco=[USUARIO_N3, {**USUARIO_N3, "id": 11}])
-    ev_a = Evidencias(nivel_solicitado=3, usuario_id=9, usuario_nivel=3, usuario_ativo=True,
+    ev_a = Evidencias(nivel_solicitado=3, usuario_id=9, usuario_nivel=3, usuario_ativo=True, consentimento_ok=True,
                       senha_ok=True, senha_forte=True, qualidade_ok=True, distancia=30.0,
                       vivacidade_ok=True)
     ev_b = Evidencias(**{**vars(ev_a), "usuario_id": 11})
@@ -239,7 +243,7 @@ def test_regra_dos_dois_exige_outra_identidade_de_nivel_3():
 
 def test_regra_dos_dois_recusa_a_mesma_pessoa_duas_vezes():
     motor, _, _ = montar(3, usuario=USUARIO_N3, usuarios_no_banco=[USUARIO_N3])
-    ev = Evidencias(nivel_solicitado=3, usuario_id=9, usuario_nivel=3, usuario_ativo=True,
+    ev = Evidencias(nivel_solicitado=3, usuario_id=9, usuario_nivel=3, usuario_ativo=True, consentimento_ok=True,
                     senha_ok=True, senha_forte=True, qualidade_ok=True, distancia=30.0,
                     vivacidade_ok=True)
     decisao, sessao = motor.concluir_regra_dois(ev, 100.0, Evidencias(**vars(ev)), 130.0)
@@ -249,7 +253,7 @@ def test_regra_dos_dois_recusa_a_mesma_pessoa_duas_vezes():
 
 def test_segunda_pessoa_fora_da_janela_nao_vale():
     motor, _, _ = montar(3, usuario=USUARIO_N3, usuarios_no_banco=[USUARIO_N3])
-    ev_a = Evidencias(nivel_solicitado=3, usuario_id=9, usuario_nivel=3, usuario_ativo=True,
+    ev_a = Evidencias(nivel_solicitado=3, usuario_id=9, usuario_nivel=3, usuario_ativo=True, consentimento_ok=True,
                       senha_ok=True, senha_forte=True, qualidade_ok=True, distancia=30.0,
                       vivacidade_ok=True)
     ev_b = Evidencias(**{**vars(ev_a), "usuario_id": 11})
@@ -328,3 +332,29 @@ def test_motor_responde_se_ainda_ha_segunda_etapa():
     sem, _, _ = montar(3, usuario=USUARIO_N3, exigir_segunda_pessoa=False)
     assert com.aguarda_segunda_pessoa(3) and not com.aguarda_segunda_pessoa(2)
     assert not sem.aguarda_segunda_pessoa(3)
+
+
+
+# ------------------------------------------------------------------ consentimento (auditoria)
+def test_titular_que_revogou_e_negado_mesmo_ativo_e_reconhecido():
+    """O achado da auditoria, como teste.
+
+    Revogar desativava o usuário, mas o rosto continuava no modelo e o campo
+    `ativo` podia ser religado. Com a face certa, a senha certa e o cadastro
+    ATIVO, o acesso tem de ser negado se não houver consentimento vigente.
+    """
+    _, tentativa, trilha = montar(2, usuario=USUARIO_N2, ev=ev_com_senha(2, 7),
+                                  usuarios_no_banco=[USUARIO_N2], sem_consentimento={7})
+    status = frames_ate_concluir(tentativa)
+    assert not status.decisao.concedido
+    assert status.decisao.motivo == Motivo.CONSENTIMENTO_AUSENTE
+    assert trilha.registros[-1]["motivo"] == "CONSENTIMENTO_AUSENTE"   # e fica na trilha
+
+
+def test_consentimento_vale_tambem_no_nivel_1():
+    """O N1 não pede senha, mas trata a face do mesmo jeito: a base legal é a mesma."""
+    analise = AnaliseDuble(rotulo=7, distancia=20.0)
+    _, tentativa, _ = montar(1, analise=analise, usuarios_no_banco=[{**USUARIO_N2, "nivel_id": 1}],
+                             sem_consentimento={7})
+    status = frames_ate_concluir(tentativa)
+    assert status.decisao.motivo == Motivo.CONSENTIMENTO_AUSENTE

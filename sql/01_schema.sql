@@ -37,7 +37,10 @@ CREATE TABLE usuario (
     senha_hash CHAR(60)     NOT NULL,                    -- bcrypt, custo 12
     ativo      BOOLEAN      NOT NULL DEFAULT TRUE,
     criado_em  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (nivel_id) REFERENCES nivel(id)
+    FOREIGN KEY (nivel_id) REFERENCES nivel(id),
+    -- diretor de nível 2 sem região veria todas as UFs se algum filtro falhasse;
+    -- a regra mora no banco para não depender só do formulário de cadastro
+    CONSTRAINT ck_usuario_n2_tem_uf CHECK (nivel_id <> 2 OR uf IS NOT NULL)
 );
 
 -- Metadado das amostras. A IMAGEM não fica aqui: é apagada após o treino.
